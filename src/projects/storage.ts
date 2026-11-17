@@ -104,7 +104,13 @@ export interface Migration {
   version: number;
   sql: string;
 }
-export const migrations: Migration[] = [{ version: 1, sql: schema }];
+export const migrations: Migration[] = [
+  { version: 1, sql: schema },
+  {
+    version: 2,
+    sql: "CREATE TABLE model_capabilities(project_id TEXT PRIMARY KEY REFERENCES projects(id), report_json TEXT NOT NULL);",
+  },
+];
 
 export function openProjectDatabase(
   path: string,

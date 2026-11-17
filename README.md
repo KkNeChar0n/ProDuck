@@ -13,6 +13,9 @@
 - 项目隔离浏览器、网页文字/结构/样式/截图采集，有来源的记忆与确认冲突展示。
 - 单文件模拟原型生成、页面 prompt 修改、带 ID 的元素选择、版本确认/恢复/源文件对比、失败任务显式重试。
 - 根据批准版本保存状态截图、生成本地 PRD 草稿并导出含截图 HTML；未批准候选不能进入文档流程。
+- 受控 Agent 多步骤任务、逐项敏感操作批准、取消与中断恢复；可读取资料/记忆、保存笔记和操作网页。
+- 说明型 Skill 导入、相对资源与版本指纹校验、兼容性报告；脚本和未适配宿主工具明确阻止运行。
+- 模型文本/图像/原生工具能力检测，原型元素 ID 保持、基础表单状态恢复及人工交互检查记录。
 - 隔离 IPC、原型网络限制、本地 SQLite schema 和原子文件存储。
 
 ## 体验界面原型
@@ -66,7 +69,7 @@ python3 tests/prototype_smoke.py
 
 [任务清单](openspec/changes/produck-mvp/tasks.md) 按验证结果勾选。界面已获用户确认；模型与原型、PRD 流程通过本地模拟 API 测试。用户已要求暂时跳过真实模型验证，因此重建视觉与交互质量未验收。普通问答仍为独立请求，不保存对话历史。
 
-飞书/云效发布、完整技能运行器、通用 Agent 工具循环和干净机器验收尚未完成。详见 [本次验证记录](docs/verification/prototype-workflow.md)。
+飞书/云效发布、完整技能运行器、干净机器验收尚未完成。详见 [原型验证记录](docs/verification/prototype-workflow.md) 和 [Agent/Skill 验证记录](docs/verification/agent-skills.md)。
 
 ## macOS 开发测试包
 
@@ -74,6 +77,6 @@ python3 tests/prototype_smoke.py
 npm run package:mac
 ```
 
-输出 `release/Produck-0.1.0-arm64-test.dmg`，包含 Electron、编译后的钥匙串程序与应用资源。目标最低系统为 macOS 13，当前只在 macOS 26.3 arm64 上构建和检查；尚未在最低系统或无开发工具的机器完成验收。
+输出 `release/Produck-0.1.1-arm64-test.dmg`，包含 Electron、编译后的钥匙串程序与应用资源。目标最低系统为 macOS 13，当前只在 macOS 26.3 arm64 上构建和检查；尚未在最低系统或无开发工具的机器完成验收。
 
 包使用临时签名，未完成 Developer ID 签名和公证，不用于公开分发。安装包未提交 Git；第三方运行组件许可证随包保存。打包验证不代表真实模型与平台集成已通过。

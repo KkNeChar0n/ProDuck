@@ -1,5 +1,7 @@
+import { PrototypeChecks } from "./PrototypeChecks";
 import { useEffect, useRef, useState } from "react";
 import type {
+  PrototypeDetails,
   ElementSelection,
   PrototypeComparison,
   Capture,
@@ -36,6 +38,8 @@ export function Workbench({
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [progress, setProgress] = useState<GenerationProgress | null>(null);
+  const [details, setDetails] = useState<PrototypeDetails | null>(null),
+    [restored, setRestored] = useState("");
   const [stateLabel, setStateLabel] = useState(""),
     [stateNotice, setStateNotice] = useState("");
   const [picking, setPicking] = useState(false),
@@ -112,12 +116,21 @@ export function Workbench({
   }, [tab, selected, versions, onContext, element]);
   useEffect(() => {
     setPreviewReady(false);
+    setDetails(null);
+    setRestored("");
     if (tab !== "prototype" || !selected) return;
     let current = true;
     void desktop()
       .workbench.loadPrototype(projectId, selected)
-      .then(() => {
-        if (current) setPreviewReady(true);
+      .then(async (result) => {
+        if (!current) return;
+        setPreviewReady(true);
+        if (result)
+          setRestored(
+            `已恢复 ${result.restored} 项表单、弹窗或滚动状态${result.skipped ? `，${result.skipped} 项因元素变化未恢复` : ""}。页面内部业务数据不自动重放。`,
+          );
+        const value = await desktop().workbench.details(projectId, selected);
+        if (current) setDetails(value);
       })
       .catch((e) => {
         if (current) setError(errorText(e));
@@ -405,6 +418,58 @@ export function Workbench({
                 <pre>{comparison.after}</pre>
               </div>
             </section>
+          )}
+          {tab === "prototype" && selected && (
+            <PrototypeChecks
+              key={selected}
+              projectId={projectId}
+              versionId={selected}
+              onChange={() =>
+                void desktop().workbench.versions(projectId).then(setVersions)
+              }
+            />
+          )}
+          {tab === "prototype" && details && (
+            <details className="change-summary">
+              <summary>
+                版本变更：新增 {details.changes.added.length} 项 · 修改{" "}
+                {details.changes.changed.length} 项 · 移除{" "}
+                {details.changes.removed.length} 项
+              </summary>
+              <p>修改要求：{details.request}</p>
+              {details.coverage?.map((c) => (
+                <p key={c.captureId}>
+                  覆盖页面：{c.title} · {c.url}
+                  <br />
+                  {c.scope}
+                </p>
+              ))}
+              {details.elementId && <p>目标元素：{details.elementId}</p>}
+              <p className="muted">
+                根据 HTML 差异生成，包含父级区域；交互正确性需要实际体验。
+              </p>
+              {(
+                [
+                  ["新增", details.changes.added],
+                  ["修改", details.changes.changed],
+                  ["移除", details.changes.removed],
+                ] as const
+              ).map(([label, items]) => (
+                <p key={label}>
+                  {label}：
+                  {items
+                    .slice(0, 12)
+                    .map((x) => x.label)
+                    .join("、") || "无"}
+                  {items.length > 12 ? "…" : ""}
+                </p>
+              ))}
+            </details>
+          )}
+          {tab === "prototype" && restored && (
+            <p role="status" className="muted">
+              {restored}
+            </p>
           )}
           <div className="native-surface" ref={surface}>
             {tab === "browser"

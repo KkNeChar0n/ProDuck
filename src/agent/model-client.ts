@@ -7,6 +7,8 @@ export interface ModelRequest {
   prompt: string;
   signal?: AbortSignal;
   maxTokens?: number;
+  image?: { mediaType: "image/png"; base64: string };
+  probeTool?: boolean;
 }
 export function validateEndpoint(input: string): string {
   const url = new URL(input);
@@ -28,12 +30,82 @@ function requestBody(input: ModelRequest, stream: boolean) {
         model: input.model,
         max_tokens: input.maxTokens ?? 1024,
         stream,
-        messages: [{ role: "user", content: input.prompt }],
+        messages: [
+          {
+            role: "user",
+            content: input.image
+              ? [
+                  {
+                    type: "image",
+                    source: {
+                      type: "base64",
+                      media_type: input.image.mediaType,
+                      data: input.image.base64,
+                    },
+                  },
+                  { type: "text", text: input.prompt },
+                ]
+              : input.prompt,
+          },
+        ],
+        ...(input.probeTool
+          ? {
+              tools: [
+                {
+                  name: "produck_probe",
+                  description: "Return OK without any side effects",
+                  input_schema: {
+                    type: "object",
+                    properties: { result: { type: "string" } },
+                    required: ["result"],
+                  },
+                },
+              ],
+              tool_choice: { type: "tool", name: "produck_probe" },
+            }
+          : {}),
       }
     : {
         model: input.model,
         stream,
-        messages: [{ role: "user", content: input.prompt }],
+        messages: [
+          {
+            role: "user",
+            content: input.image
+              ? [
+                  {
+                    type: "image_url",
+                    image_url: {
+                      url: `data:${input.image.mediaType};base64,${input.image.base64}`,
+                    },
+                  },
+                  { type: "text", text: input.prompt },
+                ]
+              : input.prompt,
+          },
+        ],
+        ...(input.probeTool
+          ? {
+              tools: [
+                {
+                  type: "function",
+                  function: {
+                    name: "produck_probe",
+                    description: "Return OK without any side effects",
+                    parameters: {
+                      type: "object",
+                      properties: { result: { type: "string" } },
+                      required: ["result"],
+                    },
+                  },
+                },
+              ],
+              tool_choice: {
+                type: "function",
+                function: { name: "produck_probe" },
+              },
+            }
+          : {}),
       };
 }
 async function send(
@@ -189,4 +261,88 @@ export async function* streamModel(
     await reader.cancel().catch(() => {});
     reader.releaseLock();
   }
+}
+
+export async function probeCapabilities(
+  input: ModelRequest,
+  transport: typeof fetch = fetch,
+): Promise<import("../contracts/models.js").CapabilityReport> {
+  await testModel(input, transport);
+  const report: import("../contracts/models.js").CapabilityReport = {
+    checkedAt: new Date().toISOString(),
+    text: "supported",
+    image: "unknown",
+    tools: "unknown",
+    notes: [],
+  };
+  const pixel =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC";
+  for (const capability of ["image", "tools"] as const) {
+    try {
+      const response = await send(
+        {
+          ...input,
+          prompt:
+            capability === "tools"
+              ? "Call produck_probe with result OK."
+              : "Describe this image briefly.",
+          ...(capability === "image"
+            ? { image: { mediaType: "image/png" as const, base64: pixel } }
+            : { probeTool: true }),
+        },
+        false,
+        transport,
+      );
+      const result = (await response.json()) as any;
+      if (capability === "image") {
+        const text =
+          input.provider === "anthropic"
+            ? result.content?.some(
+                (b: any) => b.type === "text" && typeof b.text === "string",
+              )
+            : typeof result.choices?.[0]?.message?.content === "string";
+        report.image = text ? "supported" : "unknown";
+        report.notes.push(
+          text
+            ? "接口已接受图像输入；未验证视觉理解质量。"
+            : "图像请求未返回可识别文本。",
+        );
+      } else {
+        const native =
+          input.provider === "anthropic"
+            ? result.content?.some(
+                (b: any) =>
+                  b.type === "tool_use" &&
+                  b.name === "produck_probe" &&
+                  typeof b.input?.result === "string",
+              )
+            : result.choices?.[0]?.message?.tool_calls?.some((c: any) => {
+                if (c.function?.name !== "produck_probe") return false;
+                try {
+                  return (
+                    typeof JSON.parse(c.function.arguments).result === "string"
+                  );
+                } catch {
+                  return false;
+                }
+              });
+        report.tools = native ? "supported" : "unsupported";
+        report.notes.push(
+          native
+            ? "收到有效原生工具调用；检测工具未执行任何操作。"
+            : "未收到请求的原生工具调用；Agent 仍可使用文本决策模式。",
+        );
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "检测失败";
+      if (input.signal?.aborted) throw e;
+      report[capability] = /HTTP (400|422)/.test(message)
+        ? "unsupported"
+        : "unknown";
+      report.notes.push(
+        `${capability === "image" ? "图像" : "原生工具"}检测：${message}`,
+      );
+    }
+  }
+  return report;
 }

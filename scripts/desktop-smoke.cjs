@@ -10,7 +10,9 @@ const { join, resolve } = require("node:path");
 const { pathToFileURL } = require("node:url");
 const assert = require("node:assert/strict");
 const { createServer } = require("node:http");
-let server, credentialRef;
+let server,
+  credentialRef,
+  plannerCalls = 0;
 async function cleanup() {
   if (credentialRef) {
     const { MacKeychain } = await import("../dist/integrations/credentials.js");
@@ -23,11 +25,20 @@ async function cleanup() {
 }
 const root = mkdtempSync(join(tmpdir(), "produck-desktop-test-"));
 app.setPath("userData", join(root, "profile"));
+mkdirSync(join(root, "skill"));
+writeFileSync(
+  join(root, "skill/SKILL.md"),
+  "---\nname: product-review-fixture\ndescription: Review project evidence\nallowed-tools: Read, Write\n---\nSKILL_FIXTURE_MARKER: 读取项目资料，整理待确认问题。\n",
+);
 writeFileSync(join(root, "handoff.md"), "# 桌面测试交接\n客户筛选规则。");
 dialog.showOpenDialog = async (_window, options) => ({
   canceled: false,
   filePaths: [
-    options.title === "导入交接资料" ? join(root, "handoff.md") : root,
+    options.title === "导入交接资料"
+      ? join(root, "handoff.md")
+      : options.title === "导入 Skill 文件夹"
+        ? join(root, "skill")
+        : root,
   ],
 });
 const ready = new Promise((resolve) =>
@@ -162,7 +173,7 @@ const wait = async (w, expression) => {
       const data = JSON.parse(body);
       if (data.stream) {
         res.writeHead(200, { "Content-Type": "text/event-stream" });
-        const content = data.messages[0].content.includes("原型工程师")
+        let content = data.messages[0].content.includes("原型工程师")
           ? require("node:fs").readFileSync(
               "tests/fixtures/customers.html",
               "utf8",
@@ -170,6 +181,22 @@ const wait = async (w, expression) => {
           : data.messages[0].content.includes("Markdown PRD")
             ? "# 客户管理 PRD\n\n## 目标\n支持筛选和新增客户。\n\n## 待确认\n权限规则待确认。"
             : "模型流式响应已验证";
+        if (data.messages[0].content.includes("只返回一个 JSON")) {
+          assert(data.messages[0].content.includes("SKILL_FIXTURE_MARKER"));
+          plannerCalls++;
+          content = JSON.stringify(
+            plannerCalls === 1
+              ? { call: { tool: "project_sources", args: {} } }
+              : plannerCalls === 2
+                ? {
+                    call: {
+                      tool: "write_note",
+                      args: { content: "# 待确认问题\n权限规则待核对。" },
+                    },
+                  }
+                : { done: "项目资料已整理，笔记已保存。" },
+          );
+        }
         res.end(
           "data: " +
             JSON.stringify({ choices: [{ delta: { content } }] }) +
@@ -376,6 +403,74 @@ const wait = async (w, expression) => {
   await wait(
     window,
     `document.body.innerText.includes('原型生成记录') && document.body.innerText.includes('已保存候选')`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('nav button')).find(b=>b.textContent.includes('Skills')).click()`,
+  );
+  await wait(
+    window,
+    `Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='导入 Skill 文件夹')`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='导入 Skill 文件夹').click()`,
+  );
+  await wait(
+    window,
+    `document.body.innerText.includes('product-review-fixture')`,
+  );
+  const importedSkills = await wc.executeJavaScript(
+    `window.produck.skills.list(${JSON.stringify(first.id)})`,
+  );
+  assert.equal(importedSkills[0].status, "needs-approval");
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='前往工作流选择技能').click()`,
+  );
+  await wait(
+    window,
+    `document.querySelector('[aria-label="Agent 技能"]')?.options.length===2`,
+  );
+  await wc.executeJavaScript(
+    `document.querySelector('[aria-label="Agent 技能"]').value=${JSON.stringify(importedSkills[0].id)};document.querySelector('[aria-label="Agent 技能"]').dispatchEvent(new Event('change',{bubbles:true}));`,
+  );
+  await wc.executeJavaScript(
+    `Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(document.querySelector('[aria-label="Agent 任务要求"]'),'整理项目资料并保存待确认问题');document.querySelector('[aria-label="Agent 任务要求"]').dispatchEvent(new Event('input',{bubbles:true}));`,
+  );
+  await wait(
+    window,
+    `!Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='执行任务').disabled`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='执行任务').click()`,
+  );
+  await wait(
+    window,
+    `Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='批准这一步')`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='批准这一步').click()`,
+  );
+  await wait(
+    window,
+    `document.body.innerText.includes('项目资料已整理，笔记已保存。')`,
+  );
+  const agentRuns = await wc.executeJavaScript(
+    `window.produck.agent.list(${JSON.stringify(first.id)})`,
+  );
+  assert.equal(agentRuns[0].state, "succeeded");
+  assert.equal(agentRuns[0].steps.length, 2);
+  assert.equal(plannerCalls, 3);
+  assert.equal(agentRuns[0].skill.fingerprint, importedSkills[0].fingerprint);
+  assert(
+    require("node:fs")
+      .readdirSync(join(first.workspace, "workflows"))
+      .some((x) => x.endsWith("-note.md")),
+  );
+  await wc.executeJavaScript(
+    "document.querySelector('[aria-label=\"Agent 任务要求\"]').scrollIntoView({block:'start'});new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))",
+  );
+  writeFileSync(
+    "docs/verification/desktop-agent.png",
+    (await wc.capturePage()).toPNG(),
   );
   assert.equal(await wc.executeJavaScript("typeof require"), "undefined");
   assert.equal(errors.length, 0, errors.join("\n"));

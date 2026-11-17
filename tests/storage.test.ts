@@ -57,18 +57,21 @@ test("failed schema migration restores previous rows and version from backup", (
     openProjectDatabase(path, [
       ...migrations,
       {
-        version: 2,
+        version: migrations.at(-1)!.version + 1,
         sql: "ALTER TABLE projects ADD COLUMN extra TEXT; INVALID SQL;",
       },
     ]),
   );
-  assert(existsSync(path + ".v1.backup"));
+  assert(existsSync(path + `.v${migrations.at(-1)!.version}.backup`));
   db = openProjectDatabase(path);
   assert.equal(
     db.prepare("SELECT name FROM projects WHERE id=?").get("p1")?.name,
     "项目 A",
   );
-  assert.equal(db.prepare("PRAGMA user_version").get()?.user_version, 1);
+  assert.equal(
+    db.prepare("PRAGMA user_version").get()?.user_version,
+    migrations.at(-1)!.version,
+  );
   assert(
     !db
       .prepare("PRAGMA table_info(projects)")
@@ -114,6 +117,29 @@ test("schema enforces project references and supports pending remote results", (
   assert.equal(
     db.prepare("SELECT state FROM sync_receipts").get()?.state,
     "unknown",
+  );
+  db.close();
+});
+
+test("v1 database upgrades with a backup and preserves project rows", () => {
+  const path = join(fixture(), "v1.sqlite");
+  let db = openProjectDatabase(path, migrations.slice(0, 1));
+  db.prepare("INSERT INTO projects VALUES(?,?,?,?)").run(
+    "old",
+    "旧项目",
+    "/old",
+    "now",
+  );
+  db.close();
+  db = openProjectDatabase(path);
+  assert.equal(
+    db.prepare("SELECT name FROM projects WHERE id='old'").get()?.name,
+    "旧项目",
+  );
+  assert(existsSync(path + ".v1.backup"));
+  assert.equal(
+    db.prepare("SELECT count(*) AS n FROM model_capabilities").get()?.n,
+    0,
   );
   db.close();
 });

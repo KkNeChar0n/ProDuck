@@ -61,6 +61,25 @@ let hits = 0,
     true,
   );
   await browser.action("fixture", "click", "#cancel");
+  await browser.action("fixture", "fill", "#search", "没有此客户");
+  await browser.action("fixture", "click", "#filters button");
+  assert.equal(
+    await wc.executeJavaScript("document.querySelector('#empty').hidden"),
+    false,
+  );
+  await browser.action("fixture", "click", "#reset");
+  await browser.action("fixture", "click", "#add");
+  await browser.action("fixture", "fill", "#name", "模拟客户");
+  await browser.action("fixture", "fill", "#owner", "测试负责人");
+  await browser.action("fixture", "click", "#customer-form button.primary");
+  assert.equal(
+    await wc.executeJavaScript("document.querySelector('#notice').textContent"),
+    "客户已保存",
+  );
+  assert.equal(
+    await wc.executeJavaScript("document.querySelector('#dialog').open"),
+    false,
+  );
   const captured = await browser.capture("fixture");
   assert(captured.text.includes("客户列表"));
   assert(captured.structure.includes("background"));
@@ -84,7 +103,7 @@ let hits = 0,
     undefined,
   );
   assert.equal(
-    await pw.executeJavaScript("typeof globalThis.produckPicker"),
+    await pw.executeJavaScript("typeof globalThis.__produckPreview"),
     "undefined",
   );
   await preview.selectionMode(false);
@@ -104,6 +123,69 @@ let hits = 0,
   await new Promise((r) => setTimeout(r, 100));
   assert(pw.getURL().startsWith("data:"));
   assert.equal(hits, 0);
+  const { normalizePrototype } = await import(
+    pathToFileURL(resolve("dist/prototypes/identity.js")).href
+  );
+  const original = normalizePrototype(
+    readFileSync("tests/fixtures/customers.html", "utf8").replace(
+      "</body>",
+      '<input id="secret" type="password"></body>',
+    ),
+  );
+  await preview.load(original);
+  preview.show(bounds);
+  let view = webContents
+    .getAllWebContents()
+    .find((w) => w.getURL().startsWith("data:"));
+  await view.executeJavaScript(
+    `document.querySelector('#search').value='青禾';document.querySelector('#secret').value='do-not-store';document.querySelector('#add').click();document.querySelector('#customer-form input').value='待保存客户';`,
+  );
+  const saved = await preview.captureState();
+  assert(!JSON.stringify(saved).includes("do-not-store"));
+  const edited = normalizePrototype(
+    original.replace("客户列表", "客户总览"),
+    original,
+  );
+  await preview.load(edited);
+  preview.show(bounds);
+  const restored = await preview.restoreState(saved);
+  assert(restored.restored >= 3);
+  assert.equal(restored.skipped, 0);
+  view = webContents
+    .getAllWebContents()
+    .find((w) => w.getURL().startsWith("data:"));
+  assert.equal(
+    await view.executeJavaScript("document.querySelector('#search').value"),
+    "青禾",
+  );
+  assert.equal(
+    await view.executeJavaScript("document.querySelector('#dialog').open"),
+    true,
+  );
+  assert.equal(
+    await view.executeJavaScript(
+      "document.querySelector('#customer-form input').value",
+    ),
+    "待保存客户",
+  );
+  assert.equal(
+    await view.executeJavaScript("document.querySelector('#secret').value"),
+    "",
+  );
+  // Selection must intercept even a capture listener installed by the page before mode is enabled.
+  await view.executeJavaScript(
+    "window.addEventListener('click',()=>document.body.dataset.clicked='yes',true)",
+  );
+  await preview.selectionMode(true);
+  await view.executeJavaScript("document.querySelector('#cancel').click()");
+  assert.equal(
+    await view.executeJavaScript("document.body.dataset.clicked"),
+    undefined,
+  );
+  assert.equal(
+    await view.executeJavaScript("document.querySelector('#dialog').open"),
+    true,
+  );
   preview.close();
   browser.close();
   window.destroy();

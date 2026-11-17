@@ -1,3 +1,4 @@
+import { AgentTasks } from "./AgentTasks";
 import { useEffect, useState } from "react";
 import type { PrototypeTask } from "../../contracts/workbench";
 import { desktop, errorText } from "../bridge";
@@ -24,43 +25,46 @@ export function TaskHistory({ projectId }: { projectId: string }) {
     });
   }, [projectId]);
   return (
-    <article className="paper">
-      <h2>原型生成记录</h2>
-      <p className="muted">
-        重试会使用原页面依据、基线和修改要求，重新调用模型并保存新候选。不会覆盖旧版，也不执行平台发布。
-      </p>
-      {error && (
-        <p role="alert" className="error">
-          {error}
+    <>
+      <AgentTasks projectId={projectId} />
+      <article className="paper">
+        <h2>原型生成记录</h2>
+        <p className="muted">
+          重试会使用原页面依据、基线和修改要求，重新调用模型并保存新候选。不会覆盖旧版，也不执行平台发布。
         </p>
-      )}
-      {!tasks.length && <p>还没有原型生成任务。</p>}
-      {tasks.map((t) => (
-        <section key={t.id} className="notice">
-          <strong>{labels[t.state] ?? t.state}</strong> ·{" "}
-          {new Date(t.createdAt).toLocaleString()}
-          {t.outputId && <p>候选版本：{t.outputId}</p>}
-          {t.recoverable && (
-            <button
-              disabled={busy}
-              onClick={async () => {
-                setBusy(true);
-                setError("");
-                try {
-                  await desktop().workbench.retry(projectId, t.id);
-                } catch (e) {
-                  setError(errorText(e));
-                } finally {
-                  setBusy(false);
-                  void refresh();
-                }
-              }}
-            >
-              从原依据重试
-            </button>
-          )}
-        </section>
-      ))}
-    </article>
+        {error && (
+          <p role="alert" className="error">
+            {error}
+          </p>
+        )}
+        {!tasks.length && <p>还没有原型生成任务。</p>}
+        {tasks.map((t) => (
+          <section key={t.id} className="notice">
+            <strong>{labels[t.state] ?? t.state}</strong> ·{" "}
+            {new Date(t.createdAt).toLocaleString()}
+            {t.outputId && <p>候选版本：{t.outputId}</p>}
+            {t.recoverable && (
+              <button
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  setError("");
+                  try {
+                    await desktop().workbench.retry(projectId, t.id);
+                  } catch (e) {
+                    setError(errorText(e));
+                  } finally {
+                    setBusy(false);
+                    void refresh();
+                  }
+                }}
+              >
+                从原依据重试
+              </button>
+            )}
+          </section>
+        ))}
+      </article>
+    </>
   );
 }

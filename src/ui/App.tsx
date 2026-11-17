@@ -1,3 +1,4 @@
+import { Skills } from "./components/Skills";
 import { Documents } from "./components/Documents";
 import { Workbench, type PrototypeContext } from "./components/Workbench";
 import { TaskHistory } from "./components/TaskHistory";
@@ -190,6 +191,12 @@ export function App() {
             <ProjectMemory key={project.id} projectId={project.id} />
           ) : view === "documents" ? (
             <Documents key={project.id} projectId={project.id} />
+          ) : view === "skills" ? (
+            <Skills
+              key={project.id}
+              projectId={project.id}
+              onTasks={() => setView("workflow")}
+            />
           ) : view === "workflow" ? (
             <TaskHistory key={project.id} projectId={project.id} />
           ) : view === "workbench" ? (

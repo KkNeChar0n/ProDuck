@@ -2,6 +2,27 @@ import { contextBridge, ipcRenderer } from "electron";
 contextBridge.exposeInMainWorld(
   "produck",
   Object.freeze({
+    skills: {
+      list: (id: string) => ipcRenderer.invoke("skills:list", id),
+      import: (id: string) => ipcRenderer.invoke("skills:import", id),
+    },
+    agent: {
+      start: (id: string, goal: string, budget: number, skillId?: string) =>
+        ipcRenderer.invoke("agent:start", id, goal, budget, skillId),
+      list: (id: string) => ipcRenderer.invoke("agent:list", id),
+      cancel: (id: string) => ipcRenderer.invoke("agent:cancel", id),
+      approve: (id: string, runId: string, stepId: string, value: boolean) =>
+        ipcRenderer.invoke("agent:approve", id, runId, stepId, value),
+      resume: (id: string, runId: string) =>
+        ipcRenderer.invoke("agent:resume", id, runId),
+      resolve: (id: string, runId: string, stepId: string, note: string) =>
+        ipcRenderer.invoke("agent:resolve", id, runId, stepId, note),
+      onEvent: (callback: (data: unknown) => void) => {
+        const listener = (_e: unknown, data: unknown) => callback(data);
+        ipcRenderer.on("agent:event", listener);
+        return () => ipcRenderer.removeListener("agent:event", listener);
+      },
+    },
     getInfo: () => ipcRenderer.invoke("app:info"),
     documents: {
       images: (id: string, draftId: string) =>
@@ -22,6 +43,9 @@ contextBridge.exposeInMainWorld(
       cancel: (id: string) => ipcRenderer.invoke("documents:cancel", id),
     },
     models: {
+      capabilities: (id: string) =>
+        ipcRenderer.invoke("models:capabilities", id),
+      probe: (id: string) => ipcRenderer.invoke("models:probe", id),
       profile: (id: string) => ipcRenderer.invoke("models:profile", id),
       save: (id: string, input: unknown) =>
         ipcRenderer.invoke("models:save", id, input),
@@ -36,6 +60,23 @@ contextBridge.exposeInMainWorld(
       },
     },
     workbench: {
+      checks: (id: string, versionId: string) =>
+        ipcRenderer.invoke("prototypes:checks", id, versionId),
+      recordCheck: (
+        id: string,
+        versionId: string,
+        key: string,
+        result: string,
+        note: string,
+      ) =>
+        ipcRenderer.invoke(
+          "prototypes:record-check",
+          id,
+          versionId,
+          key,
+          result,
+          note,
+        ),
       open: (id: string, url: string) =>
         ipcRenderer.invoke("browser:open", id, url),
       showBrowser: (id: string, bounds: unknown) =>
@@ -61,6 +102,7 @@ contextBridge.exposeInMainWorld(
         captureId: string,
         change?: string,
         baselineId?: string,
+        elementId?: string,
       ) =>
         ipcRenderer.invoke(
           "prototypes:generate",
@@ -68,8 +110,11 @@ contextBridge.exposeInMainWorld(
           captureId,
           change,
           baselineId,
+          elementId,
         ),
       cancel: (id: string) => ipcRenderer.invoke("prototypes:cancel", id),
+      details: (id: string, versionId: string) =>
+        ipcRenderer.invoke("prototypes:details", id, versionId),
       loadPrototype: (id: string, versionId: string) =>
         ipcRenderer.invoke("prototypes:load", id, versionId),
       showPrototype: (id: string, bounds: unknown) =>

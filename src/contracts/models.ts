@@ -16,3 +16,12 @@ export interface ModelDelta {
   requestId: string;
   text: string;
 }
+
+export type ModelCapability = "text" | "image" | "tools";
+export interface CapabilityReport {
+  checkedAt: string;
+  text: "supported" | "unsupported" | "unknown";
+  image: "supported" | "unsupported" | "unknown";
+  tools: "supported" | "unsupported" | "unknown";
+  notes: string[];
+}

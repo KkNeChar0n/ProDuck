@@ -67,3 +67,60 @@ export interface PrototypeTask {
   outputId: string | null;
   recoverable: boolean;
 }
+
+export interface PreviewState {
+  scroll: { x: number; y: number };
+  elements: {
+    id: string;
+    tag: string;
+    type: string;
+    value?: string;
+    checked?: boolean;
+    open?: boolean;
+    scrollTop: number;
+    scrollLeft: number;
+  }[];
+}
+export interface PrototypeEdit {
+  elementId?: string;
+  state?: PreviewState;
+}
+export interface PrototypeDetails {
+  coverage?: {
+    captureId: string;
+    title: string;
+    url: string;
+    capturedAt: string;
+    scope: string;
+  }[];
+  request: string;
+  elementId?: string;
+  state?: PreviewState;
+  changes: {
+    added: { id: string; label: string }[];
+    removed: { id: string; label: string }[];
+    changed: { id: string; label: string }[];
+    sourceChanged: boolean;
+  };
+}
+export interface RestoreResult {
+  restored: number;
+  skipped: number;
+}
+
+export const prototypeCheckNames = {
+  filter: "筛选与重置",
+  dialog: "打开与关闭弹窗",
+  validation: "必填与格式校验",
+  cancel: "取消不提交",
+  success: "模拟提交成功",
+  empty: "无结果空态",
+} as const;
+export type PrototypeCheckKey = keyof typeof prototypeCheckNames;
+export interface PrototypeCheck {
+  key: PrototypeCheckKey;
+  result: "passed" | "failed";
+  note: string;
+  checkedAt: string;
+  contentHash: string;
+}

@@ -1,6 +1,6 @@
 {
   "name": "produck",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "A local-first product manager agent for macOS",
   "type": "module",
@@ -20,6 +20,7 @@
     "package:mac": "npm run build && node scripts/package-macos.mjs"
   },
   "dependencies": {
+    "parse5": "8.0.0",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },

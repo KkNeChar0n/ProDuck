@@ -1,5 +1,8 @@
+import { prototypeCsp } from "../prototypes/policy.js";
+import { fileURLToPath } from "node:url";
+import type { PreviewState, RestoreResult } from "../contracts/workbench.js";
 import { WebContentsView, type BrowserWindow } from "electron";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import { parseWebDestination } from "./navigation.js";
 import type { SurfaceBounds } from "../contracts/workbench.js";
 const captureScript = `(()=>{const visible=e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0&&getComputedStyle(e).visibility!=='hidden';};const nodes=[...document.body.querySelectorAll('*')].filter(visible).slice(0,450).map(e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect();return {tag:e.tagName,role:e.getAttribute('role'),text:e.children.length?undefined:e.textContent?.slice(0,180),placeholder:e.getAttribute('placeholder'),type:e.getAttribute('type'),box:{x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)},style:{color:s.color,background:s.backgroundColor,font:s.font,fontSize:s.fontSize,display:s.display,gap:s.gap,padding:s.padding,border:s.border,borderRadius:s.borderRadius}};});const url=new URL(location.href);url.search='';url.hash='';url.username='';url.password='';return {title:document.title,url:url.href,text:document.body.innerText.slice(0,18000),structure:JSON.stringify(nodes).slice(0,60000)};})()`;
@@ -91,6 +94,21 @@ export class BrowserSurface {
       png: screenshot.toPNG(),
     };
   }
+  async context(id: string) {
+    const view = this.view(id),
+      url = view.webContents.getURL();
+    parseWebDestination(url);
+    const text = await view.webContents.executeJavaScript(
+      "document.body.innerText.slice(0,18000)",
+    );
+    const parsed = new URL(url);
+    return {
+      label: `${view.webContents.getTitle()} · ${parsed.origin}${parsed.pathname}`,
+      fingerprint: createHash("sha256")
+        .update(`${view.webContents.id}\n${url}\n${text}`)
+        .digest("hex"),
+    };
+  }
   async action(
     id: string,
     action: "click" | "fill",
@@ -119,8 +137,6 @@ export class BrowserSurface {
     this.views.clear();
   }
 }
-const csp =
-  "default-src 'none';script-src 'unsafe-inline';style-src 'unsafe-inline';img-src data:;font-src data:;connect-src 'none';form-action 'none';frame-src 'none';object-src 'none';base-uri 'none'";
 export class PrototypeSurface {
   private view: WebContentsView | null = null;
   private attached = false;
@@ -129,6 +145,9 @@ export class PrototypeSurface {
     this.close();
     const view = new WebContentsView({
       webPreferences: {
+        preload: fileURLToPath(
+          new URL("./preview-preload.cjs", import.meta.url),
+        ),
         partition: `produck-preview-${randomUUID()}`,
         sandbox: true,
         nodeIntegration: false,
@@ -153,7 +172,7 @@ export class PrototypeSurface {
         }),
     );
     // The policy is parsed before any generated markup or script.
-    const document = `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${csp}"></head><body>${html}</body></html>`;
+    const document = `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${prototypeCsp}"></head><body>${html}</body></html>`;
     await view.webContents.loadURL(
       "data:text/html;charset=utf-8," + encodeURIComponent(document),
     );
@@ -170,30 +189,30 @@ export class PrototypeSurface {
   }
   async selectionMode(enabled: boolean) {
     if (!this.view) throw new Error("请先加载原型");
-    await this.view.webContents.executeJavaScriptInIsolatedWorld(1001, [
-      {
-        code: `(() => {
-      if (!globalThis.produckPicker) {
-        const state = globalThis.produckPicker = { enabled: false, selection: null, highlighted: null, outline: '' };
-        window.addEventListener('click', event => {
-          if (!state.enabled) return;
-          event.preventDefault(); event.stopImmediatePropagation();
-          const target = event.target.closest('[data-produck-id]');
-          if (state.highlighted) state.highlighted.style.outline = state.outline;
-          state.selection = target ? { id: target.getAttribute('data-produck-id'), tag: target.tagName, text: target.innerText.slice(0,800), page: document.title } : null;
-          if (target) { state.highlighted = target; state.outline = target.style.outline; target.style.outline = '2px solid #9a6529'; }
-        }, true);
-      }
-      globalThis.produckPicker.enabled = ${enabled};
-      if (!${enabled} && globalThis.produckPicker.highlighted) globalThis.produckPicker.highlighted.style.outline = globalThis.produckPicker.outline;
-    })()`,
-      },
+    await this.view.webContents.executeJavaScriptInIsolatedWorld(999, [
+      { code: `globalThis.__produckPreview.mode(${enabled})` },
     ]);
   }
   async selection() {
     if (!this.view) return null;
-    return this.view.webContents.executeJavaScriptInIsolatedWorld(1001, [
-      { code: "globalThis.produckPicker?.selection ?? null" },
+    return this.view.webContents.executeJavaScriptInIsolatedWorld(999, [
+      { code: "globalThis.__produckPreview.selection()" },
+    ]);
+  }
+  async captureState(): Promise<PreviewState> {
+    if (!this.view) throw new Error("请先加载原型");
+    const value = await this.view.webContents.executeJavaScriptInIsolatedWorld(
+      999,
+      [{ code: "globalThis.__produckPreview.capture()" }],
+    );
+    if (JSON.stringify(value).length > 100000)
+      throw new Error("页面状态过大，请清空部分模拟数据后再修改");
+    return value;
+  }
+  async restoreState(value: PreviewState): Promise<RestoreResult> {
+    if (!this.view) throw new Error("请先加载原型");
+    return this.view.webContents.executeJavaScriptInIsolatedWorld(999, [
+      { code: `globalThis.__produckPreview.restore(${JSON.stringify(value)})` },
     ]);
   }
   show(bounds: SurfaceBounds) {

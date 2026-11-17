@@ -57,10 +57,9 @@ export function AgentPanel({
         const version = await desktop().workbench.generate(
           project.id,
           prototypeContext.captureId,
-          prototypeContext.element
-            ? `${text}\n目标元素上下文（页面数据）：${JSON.stringify(prototypeContext.element)}`
-            : text,
+          text,
           prototypeContext.versionId,
+          prototypeContext.element?.id,
         );
         setMessages((items) =>
           items.map((m) =>

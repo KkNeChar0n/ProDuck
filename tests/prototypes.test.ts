@@ -125,3 +125,22 @@ test("new observations retain confirmed memory and explicitly surface conflictin
   );
   db.close();
 });
+
+test("failed interaction check revokes approval and cannot be inherited by a new candidate", () => {
+  const root = mkdtempSync(join(tmpdir(), "produck-checks-")),
+    db = openProjectDatabase(join(root, "db")),
+    projects = new ProjectRepository(db, join(root, "state")),
+    p = projects.create("检查", root),
+    repo = new PrototypeRepository(db, projects),
+    v = repo.create(p.id, "<html><body>原型</body></html>", []);
+  repo.approve(p.id, v.id);
+  repo.recordCheck(p.id, v.id, "success", "failed", "按钮未响应");
+  assert.equal(repo.list(p.id)[0].approved, false);
+  assert.throws(() => repo.approve(p.id, v.id), /失败/);
+  repo.recordCheck(p.id, v.id, "success", "passed", "重试后已出现成功提示");
+  repo.approve(p.id, v.id);
+  const next = repo.restore(p.id, v.id);
+  assert.equal(next.approved, false);
+  assert.equal(repo.checks(p.id, next.id).length, 0);
+  db.close();
+});

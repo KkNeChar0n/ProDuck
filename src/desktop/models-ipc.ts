@@ -19,6 +19,14 @@ export function registerModelIpc(
     )
       throw new Error("Untrusted caller");
   }
+  ipcMain.handle("models:capabilities", (e, id: string) => {
+    trusted(e);
+    return service.capabilities(id);
+  });
+  ipcMain.handle("models:probe", (e, id: string) => {
+    trusted(e);
+    return service.probe(id);
+  });
   ipcMain.handle("models:profile", (e, id: string) => {
     trusted(e);
     return service.profile(id);

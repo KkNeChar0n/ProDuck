@@ -1,9 +1,17 @@
+import {
+  prototypeCheckNames,
+  type PrototypeCheck,
+  type PrototypeCheckKey,
+} from "../contracts/workbench.js";
 import type { DatabaseSync } from "node:sqlite";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { atomicWrite, projectPath } from "../projects/storage.js";
 import type { ProjectRepository } from "../projects/repository.js";
-import type { PrototypeVersion } from "../contracts/workbench.js";
+import type {
+  PrototypeVersion,
+  PrototypeDetails,
+} from "../contracts/workbench.js";
 export const hash = (html: string) =>
   createHash("sha256").update(html).digest("hex");
 export class PrototypeRepository {
@@ -48,6 +56,7 @@ export class PrototypeRepository {
     html: string,
     sourceRefs: string[],
     baselineId: string | null = null,
+    details?: PrototypeDetails,
   ): PrototypeVersion {
     const project = this.projects.get(projectId);
     if (baselineId) this.read(projectId, baselineId);
@@ -62,6 +71,11 @@ export class PrototypeRepository {
       contentHash = hash(html),
       createdAt = new Date().toISOString();
     atomicWrite(projectPath(project.workspace, relativePath), html);
+    if (details)
+      atomicWrite(
+        projectPath(project.workspace, `prototypes/${id}.json`),
+        JSON.stringify({ ...details, contentHash }, null, 2),
+      );
     this.db
       .prepare("INSERT INTO artifact_versions VALUES(?,?,?,?,?,?,?)")
       .run(
@@ -82,7 +96,72 @@ export class PrototypeRepository {
       approved: false,
     };
   }
+  details(projectId: string, id: string): PrototypeDetails | null {
+    const html = this.read(projectId, id),
+      path = projectPath(
+        this.projects.get(projectId).workspace,
+        `prototypes/${id}.json`,
+      );
+    if (!existsSync(path)) return null;
+    const value = JSON.parse(readFileSync(path, "utf8"));
+    if (value.contentHash !== hash(html))
+      throw new Error("版本说明与原型内容不匹配");
+    return value;
+  }
+  checks(projectId: string, id: string): PrototypeCheck[] {
+    const html = this.read(projectId, id),
+      path = projectPath(
+        this.projects.get(projectId).workspace,
+        `prototypes/${id}-checks.json`,
+      );
+    if (!existsSync(path)) return [];
+    return (JSON.parse(readFileSync(path, "utf8")) as PrototypeCheck[]).filter(
+      (c) => c.contentHash === hash(html),
+    );
+  }
+  recordCheck(
+    projectId: string,
+    id: string,
+    key: PrototypeCheckKey,
+    result: "passed" | "failed",
+    note: string,
+  ) {
+    if (
+      !Object.hasOwn(prototypeCheckNames, key) ||
+      !["passed", "failed"].includes(result) ||
+      typeof note !== "string" ||
+      note.length > 2000 ||
+      (result === "failed" && !note.trim())
+    )
+      throw new Error("请填写有效检查项和失败说明");
+    const contentHash = hash(this.read(projectId, id)),
+      record: PrototypeCheck = {
+        key,
+        result,
+        note,
+        contentHash,
+        checkedAt: new Date().toISOString(),
+      },
+      records = [
+        ...this.checks(projectId, id).filter((c) => c.key !== key),
+        record,
+      ];
+    atomicWrite(
+      projectPath(
+        this.projects.get(projectId).workspace,
+        `prototypes/${id}-checks.json`,
+      ),
+      JSON.stringify(records, null, 2),
+    );
+    if (result === "failed")
+      this.db
+        .prepare("DELETE FROM approvals WHERE artifact_id=? AND content_hash=?")
+        .run(id, contentHash);
+    return records;
+  }
   approve(projectId: string, id: string): PrototypeVersion {
+    if (this.checks(projectId, id).some((c) => c.result === "failed"))
+      throw new Error("此版本存在失败检查项，请修复或重新检查后再通过");
     const contentHash = hash(this.read(projectId, id));
     const found = this.list(projectId).find((v) => v.id === id)!;
     if (!found.approved)

@@ -120,3 +120,90 @@ test("cancelled fetch is reported as cancellation", async () => {
     /已取消/,
   );
 });
+
+test("capability probes distinguish accepted images and native tool responses for both providers", async () => {
+  const { probeCapabilities } = await import("../src/agent/model-client.js");
+  for (const provider of ["openai-compatible", "anthropic"] as const) {
+    const calls: any[] = [];
+    const transport = (async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      calls.push(body);
+      if (body.tools)
+        return new Response(
+          JSON.stringify(
+            provider === "anthropic"
+              ? {
+                  content: [
+                    {
+                      type: "tool_use",
+                      name: "produck_probe",
+                      input: { result: "OK" },
+                    },
+                  ],
+                }
+              : {
+                  choices: [
+                    {
+                      message: {
+                        tool_calls: [
+                          {
+                            function: {
+                              name: "produck_probe",
+                              arguments: '{"result":"OK"}',
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+          ),
+        );
+      return new Response(
+        JSON.stringify(
+          provider === "anthropic"
+            ? { content: [{ type: "text", text: "OK" }] }
+            : { choices: [{ message: { content: "OK" } }] },
+        ),
+      );
+    }) as typeof fetch;
+    const report = await probeCapabilities(
+      {
+        provider,
+        endpoint: "https://example.com/v1",
+        model: "fixture",
+        token: "synthetic",
+        prompt: "test",
+      },
+      transport,
+    );
+    assert.equal(report.text, "supported");
+    assert.equal(report.image, "supported");
+    assert.equal(report.tools, "supported");
+    assert.equal(calls.length, 3);
+    assert(Array.isArray(calls[1].messages[0].content));
+  }
+});
+test("unsupported image payload and missing tool call do not report supported capability", async () => {
+  const { probeCapabilities } = await import("../src/agent/model-client.js");
+  let n = 0;
+  const report = await probeCapabilities(
+    {
+      provider: "openai-compatible",
+      endpoint: "https://example.com/v1",
+      model: "text-only",
+      token: "synthetic",
+      prompt: "test",
+    },
+    (async () => {
+      n++;
+      return n === 2
+        ? new Response("{}", { status: 400 })
+        : new Response(
+            JSON.stringify({ choices: [{ message: { content: "OK" } }] }),
+          );
+    }) as typeof fetch,
+  );
+  assert.equal(report.image, "unsupported");
+  assert.equal(report.tools, "unsupported");
+});

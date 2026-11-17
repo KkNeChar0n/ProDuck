@@ -1,3 +1,10 @@
+import { SkillRepository } from "../skills/repository.js";
+import { registerSkillsIpc } from "./skills-ipc.js";
+import type { PrototypeCheckKey } from "../contracts/workbench.js";
+import { ToolRegistry } from "../agent/tools.js";
+import { AgentRunner } from "../agent/runner.js";
+import { createPlanner } from "./agent-planner.js";
+import { registerAgentIpc } from "./agent-ipc.js";
 import { DocumentWorkflow } from "../workflows/documents.js";
 import { atomicWrite } from "../projects/storage.js";
 import {
@@ -29,6 +36,30 @@ export function registerWorkbenchIpc(
     preview = new PrototypeSurface(getWindow),
     versions = new PrototypeRepository(db, projects),
     generator = new PrototypeGenerator(db, projects, models, versions);
+  const tools = new ToolRegistry(projects, versions, {
+    context: (id) => browser.context(id),
+    open: (id, url) => browser.open(id, url),
+    action: (id, action, selector, value) =>
+      browser.action(id, action, selector, value),
+    capture: async (id) => {
+      const { png, ...value } = await browser.capture(id);
+      return saveCapture(projects.get(id).workspace, value, png);
+    },
+  });
+  const skills = new SkillRepository(projects);
+  registerSkillsIpc(skills, getWindow);
+  const agent = new AgentRunner(
+    db,
+    projects,
+    tools,
+    createPlanner(models),
+    (run) => {
+      const win = getWindow();
+      if (win && !win.isDestroyed()) win.webContents.send("agent:event", run);
+    },
+    skills,
+  );
+  registerAgentIpc(agent, getWindow);
   const documents = new DocumentWorkflow(projects, versions, models);
   let previewVersion: string | null = null;
   let previewProject: string | null = null;
@@ -124,20 +155,44 @@ export function registerWorkbenchIpc(
   });
   ipcMain.handle(
     "prototypes:generate",
-    (
+    async (
       e,
       id: string,
       captureId: string,
       change?: string,
       baselineId?: string,
+      elementId?: string,
     ) => {
       trusted(e, id);
-      return generator.generate(id, captureId, notify(e), change, baselineId);
+      let edit;
+      if (
+        baselineId &&
+        previewProject === id &&
+        previewVersion === baselineId
+      ) {
+        const state = await preview.captureState();
+        const selection = await preview.selection();
+        if (elementId && selection?.id !== elementId)
+          throw new Error("选中元素已变化，请重新选择");
+        edit = { state, elementId };
+      } else if (elementId) throw new Error("请先打开要修改的原型版本");
+      return generator.generate(
+        id,
+        captureId,
+        notify(e),
+        change,
+        baselineId,
+        edit,
+      );
     },
   );
   ipcMain.handle("prototypes:cancel", (e, id: string) => {
     trusted(e, id);
     generator.cancel(id);
+  });
+  ipcMain.handle("prototypes:details", (e, id: string, versionId: string) => {
+    trusted(e, id);
+    return versions.details(id, versionId);
   });
   ipcMain.handle(
     "prototypes:load",
@@ -147,6 +202,8 @@ export function registerWorkbenchIpc(
       previewProject = id;
       previewVersion = versionId;
       await preview.load(versions.read(id, versionId));
+      const saved = versions.details(id, versionId)?.state;
+      return saved ? preview.restoreState(saved) : null;
     },
   );
   ipcMain.handle("prototypes:show", (e, id: string, bounds: SurfaceBounds) => {
@@ -155,6 +212,24 @@ export function registerWorkbenchIpc(
     browser.hide();
     preview.show(bounds);
   });
+  ipcMain.handle("prototypes:checks", (e, id: string, versionId: string) => {
+    trusted(e, id);
+    return versions.checks(id, versionId);
+  });
+  ipcMain.handle(
+    "prototypes:record-check",
+    (
+      e,
+      id: string,
+      versionId: string,
+      key: PrototypeCheckKey,
+      result: "passed" | "failed",
+      note: string,
+    ) => {
+      trusted(e, id);
+      return versions.recordCheck(id, versionId, key, result, note);
+    },
+  );
   ipcMain.handle("prototypes:approve", (e, id: string, versionId: string) => {
     trusted(e, id);
     return versions.approve(id, versionId);
@@ -213,6 +288,7 @@ export function registerWorkbenchIpc(
     return true;
   });
   return () => {
+    agent.close();
     documents.close();
     generator.close();
     browser.close();

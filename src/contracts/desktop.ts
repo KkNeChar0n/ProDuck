@@ -1,6 +1,12 @@
+import type { ImportedSkill } from "./skills.js";
+import type { AgentRun } from "./agent.js";
 import type { DocumentDraft, PrototypeState } from "./documents.js";
 import type { PageMemory } from "./workbench.js";
 import type {
+  PrototypeCheck,
+  PrototypeCheckKey,
+  PrototypeDetails,
+  RestoreResult,
   PrototypeTask,
   ElementSelection,
   PrototypeComparison,
@@ -10,7 +16,12 @@ import type {
   GenerationProgress,
 } from "./workbench.js";
 import type { SourceDocument } from "./sources.js";
-import type { ModelInput, ModelProfile, ModelDelta } from "./models.js";
+import type {
+  ModelInput,
+  ModelProfile,
+  ModelDelta,
+  CapabilityReport,
+} from "./models.js";
 import type { WorkspaceState, ProjectConnection } from "./projects.js";
 export interface DesktopInfo {
   name: string;
@@ -18,8 +29,44 @@ export interface DesktopInfo {
   platform: string;
 }
 export interface DesktopBridge {
+  skills: {
+    list(id: string): Promise<ImportedSkill[]>;
+    import(id: string): Promise<ImportedSkill | null>;
+  };
+  agent: {
+    start(
+      id: string,
+      goal: string,
+      budget: number,
+      skillId?: string,
+    ): Promise<AgentRun>;
+    list(id: string): Promise<AgentRun[]>;
+    cancel(id: string): Promise<void>;
+    approve(
+      id: string,
+      runId: string,
+      stepId: string,
+      value: boolean,
+    ): Promise<void>;
+    resume(id: string, runId: string): Promise<AgentRun>;
+    resolve(
+      id: string,
+      runId: string,
+      stepId: string,
+      note: string,
+    ): Promise<AgentRun>;
+    onEvent(callback: (run: AgentRun) => void): () => void;
+  };
   getInfo(): Promise<DesktopInfo>;
   workbench: {
+    checks(id: string, versionId: string): Promise<PrototypeCheck[]>;
+    recordCheck(
+      id: string,
+      versionId: string,
+      key: PrototypeCheckKey,
+      result: "passed" | "failed",
+      note: string,
+    ): Promise<PrototypeCheck[]>;
     open(id: string, url: string): Promise<{ url: string; title: string }>;
     showBrowser(id: string, bounds: SurfaceBounds): Promise<void>;
     hide(): Promise<void>;
@@ -47,9 +94,11 @@ export interface DesktopBridge {
       captureId: string,
       change?: string,
       baselineId?: string,
+      elementId?: string,
     ): Promise<PrototypeVersion>;
     cancel(id: string): Promise<void>;
-    loadPrototype(id: string, versionId: string): Promise<void>;
+    loadPrototype(id: string, versionId: string): Promise<RestoreResult | null>;
+    details(id: string, versionId: string): Promise<PrototypeDetails | null>;
     showPrototype(id: string, bounds: SurfaceBounds): Promise<void>;
     approve(id: string, versionId: string): Promise<PrototypeVersion>;
     restore(id: string, versionId: string): Promise<PrototypeVersion>;
@@ -77,6 +126,8 @@ export interface DesktopBridge {
     cancel(id: string): Promise<void>;
   };
   models: {
+    capabilities(id: string): Promise<CapabilityReport | null>;
+    probe(id: string): Promise<CapabilityReport>;
     profile(projectId: string): Promise<ModelProfile | null>;
     save(projectId: string, input: ModelInput): Promise<ModelProfile>;
     test(projectId: string): Promise<void>;
