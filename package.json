@@ -15,7 +15,9 @@
     "format": "prettier --write src scripts prototypes tests/*.ts *.json vite.config.ts",
     "format:check": "prettier --check src scripts prototypes tests/*.ts *.json vite.config.ts",
     "test:desktop": "node scripts/run-electron.mjs scripts/desktop-smoke.cjs",
-    "build:native": "node scripts/build-native.mjs"
+    "build:native": "node scripts/build-native.mjs",
+    "test:workbench": "node scripts/run-electron.mjs scripts/workbench-smoke.cjs",
+    "package:mac": "npm run build && node scripts/package-macos.mjs"
   },
   "dependencies": {
     "react": "19.3.1",

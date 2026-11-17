@@ -1,4 +1,6 @@
-import { ProjectSources } from "./components/ProjectSources";
+import { Documents } from "./components/Documents";
+import { Workbench, type PrototypeContext } from "./components/Workbench";
+import { TaskHistory } from "./components/TaskHistory";
 import { AgentPanel } from "./components/AgentPanel";
 import { useEffect, useState } from "react";
 import type { WorkspaceState } from "../contracts/projects";
@@ -23,10 +25,12 @@ export function App() {
     [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
     [view, setView] = useState<View>("workbench"),
-    [tab, setTab] = useState("browser"),
     [collapsed, setCollapsed] = useState(false),
     [creating, setCreating] = useState(false),
-    [switching, setSwitching] = useState(false);
+    [switching, setSwitching] = useState(false),
+    [prototypeContext, setPrototypeContext] = useState<PrototypeContext | null>(
+      null,
+    );
   const project = state.projects.find((p) => p.id === state.activeProjectId);
   async function refresh() {
     setLoading(true);
@@ -48,7 +52,6 @@ export function App() {
     try {
       setState(await desktop().projects.select(id));
       setView("workbench");
-      setTab("browser");
     } catch (e) {
       setError(errorText(e));
     } finally {
@@ -185,59 +188,21 @@ export function App() {
             <ProjectSettings key={project.id} project={project} />
           ) : view === "memory" ? (
             <ProjectMemory key={project.id} projectId={project.id} />
+          ) : view === "documents" ? (
+            <Documents key={project.id} projectId={project.id} />
+          ) : view === "workflow" ? (
+            <TaskHistory key={project.id} projectId={project.id} />
           ) : view === "workbench" ? (
-            <>
-              <div className="tabs" role="tablist">
-                {[
-                  ["browser", "浏览器"],
-                  ["prototype", "原型"],
-                  ["document", "文档"],
-                ].map(([id, label]) => (
-                  <button
-                    key={id}
-                    role="tab"
-                    aria-selected={tab === id}
-                    className={`tab ${tab === id ? "active" : ""}`}
-                    onClick={() => setTab(id)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              {tab === "browser" ? (
-                <ProjectSources key={project.id} projectId={project.id} />
-              ) : (
-                <div className="empty canvas">
-                  <h2>
-                    {tab === "browser"
-                      ? "准备理解你的产品"
-                      : tab === "prototype"
-                        ? "还没有原型"
-                        : "还没有文档"}
-                  </h2>
-                  <p>
-                    {tab === "browser"
-                      ? "工作空间已准备好。可以配置模型开始讨论。网页采集将在后续任务中接入。"
-                      : tab === "prototype"
-                        ? "原型将根据页面依据生成，并保留每次修改的版本。"
-                        : "通过原型后，可在这里审阅需求文档。"}
-                  </p>
-                  <button onClick={() => setView("settings")}>
-                    配置项目地址
-                  </button>
-                </div>
-              )}
-            </>
+            <Workbench
+              key={project.id}
+              projectId={project.id}
+              visible={!creating}
+              onContext={setPrototypeContext}
+            />
           ) : (
             <article className="paper">
               <h2>{title}</h2>
-              <p>
-                {view === "documents"
-                  ? "此项目还没有生成文档。"
-                  : view === "workflow"
-                    ? "此项目尚无执行任务。"
-                    : "Skill 运行器尚未接入。"}
-              </p>
+              <p>Skill 运行器尚未接入。</p>
               <button onClick={() => setView("workbench")}>返回工作台</button>
             </article>
           )}
@@ -264,6 +229,7 @@ export function App() {
         key={project?.id ?? "empty"}
         project={project}
         onSettings={() => setView("settings")}
+        prototypeContext={view === "workbench" ? prototypeContext : null}
       />
       {creating && (
         <CreateProject

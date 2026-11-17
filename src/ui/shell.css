@@ -946,3 +946,91 @@ dialog::backdrop {
 .model-settings .form-field {
   margin: 12px 0;
 }
+.native-surface {
+  height: 400px;
+  min-height: 240px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.capture-controls {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+.capture-controls label {
+  display: flex;
+  flex: 1;
+  min-width: 180px;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 11px;
+}
+.capture-controls select {
+  width: 100%;
+  font-size: 11px;
+}
+.capture-controls button {
+  font-size: 11px;
+}
+.memory-entry {
+  border-top: 1px solid var(--line);
+  padding: 16px 0;
+}
+.memory-entry summary {
+  cursor: pointer;
+}
+.memory-content {
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.9;
+}
+
+.comparison-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.comparison-columns pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: auto;
+  max-height: 420px;
+  padding: 12px;
+  background: #f4f1e9;
+  font-size: 12px;
+}
+
+.document-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  line-height: 1.8;
+}
+.state-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+.state-choice input {
+  width: auto;
+}
+.paper fieldset {
+  border: 1px solid #dddcd1;
+  margin: 16px 0;
+  border-radius: 8px;
+}
+.paper textarea {
+  display: block;
+  width: 100%;
+  margin: 12px 0;
+}
+
+.document-image {
+  max-width: 100%;
+  border: 1px solid #dddcd1;
+  border-radius: 8px;
+}

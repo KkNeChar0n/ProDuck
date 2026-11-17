@@ -1,3 +1,4 @@
+import type { PrototypeContext } from "./Workbench";
 import { useEffect, useState } from "react";
 import { desktop, errorText } from "../bridge";
 import type { Project } from "../../contracts/projects";
@@ -9,9 +10,11 @@ interface Message {
 export function AgentPanel({
   project,
   onSettings,
+  prototypeContext,
 }: {
   project?: Project;
   onSettings: () => void;
+  prototypeContext?: PrototypeContext | null;
 }) {
   const [messages, setMessages] = useState<Message[]>([]),
     [prompt, setPrompt] = useState(""),
@@ -50,7 +53,23 @@ export function AgentPanel({
     ]);
     setRunning(true);
     try {
-      await desktop().models.stream(project.id, requestId, text);
+      if (prototypeContext) {
+        const version = await desktop().workbench.generate(
+          project.id,
+          prototypeContext.captureId,
+          prototypeContext.element
+            ? `${text}\n目标元素上下文（页面数据）：${JSON.stringify(prototypeContext.element)}`
+            : text,
+          prototypeContext.versionId,
+        );
+        setMessages((items) =>
+          items.map((m) =>
+            m.id === requestId
+              ? { ...m, text: "修改已保存为新候选版本，请在原型中体验后确认。" }
+              : m,
+          ),
+        );
+      } else await desktop().models.stream(project.id, requestId, text);
     } catch (error) {
       setError(errorText(error));
       setMessages((items) =>
@@ -100,7 +119,7 @@ export function AgentPanel({
               ? `「${project.name}」已准备好。配置项目模型后，可以从一次讨论开始。`
               : "创建项目后即可配置模型并开始对话。"}
             <div className="evidence">
-              当前每条提问独立发送。网页工具、对话记忆与原型生成仍在接入。
+              在原型页发送要求会生成新候选；其他页面为独立问答，暂不保存对话历史。
             </div>
             {project && (
               <button className="link" onClick={onSettings}>
@@ -116,7 +135,11 @@ export function AgentPanel({
         )}
       </div>
       <div className="composer">
-        <div className="context-chip">{project?.name ?? "尚未选择项目"}</div>
+        <div className="context-chip">
+          {project?.name ?? "尚未选择项目"}
+          {prototypeContext?.element &&
+            ` · ${prototypeContext.element.tag} #${prototypeContext.element.id}`}
+        </div>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -128,19 +151,28 @@ export function AgentPanel({
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             disabled={!project || running}
-            placeholder="描述你的产品问题…"
+            placeholder={
+              prototypeContext
+                ? "描述你希望如何调整当前页面…"
+                : "描述你的产品问题…"
+            }
             rows={4}
           />
           <div className="composer-actions">
-            <small>单次问答 · 此阶段不保存历史</small>
+            <small>
+              {prototypeContext
+                ? "修改当前原型 · 自动保存新版本"
+                : "单次问答 · 此阶段不保存历史"}
+            </small>
             {running ? (
               <button
                 type="button"
                 onClick={() =>
                   project &&
-                  desktop()
-                    .models.cancel(project.id)
-                    .catch((e) => setError(errorText(e)))
+                  (prototypeContext
+                    ? desktop().workbench.cancel(project.id)
+                    : desktop().models.cancel(project.id)
+                  ).catch((e) => setError(errorText(e)))
                 }
               >
                 取消

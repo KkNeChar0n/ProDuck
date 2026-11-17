@@ -1,5 +1,10 @@
-const { app, BrowserWindow, dialog } = require("electron");
-const { mkdtempSync, mkdirSync, writeFileSync } = require("node:fs");
+const { app, BrowserWindow, dialog, webContents } = require("electron");
+const {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+} = require("node:fs");
 const { tmpdir } = require("node:os");
 const { join, resolve } = require("node:path");
 const { pathToFileURL } = require("node:url");
@@ -114,6 +119,13 @@ const wait = async (w, expression) => {
     (await wc.capturePage()).toPNG(),
   );
   await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('[role=tab]')).find(b=>b.textContent==='交接资料').click()`,
+  );
+  await wait(
+    window,
+    `Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='导入交接资料')`,
+  );
+  await wc.executeJavaScript(
     `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='导入交接资料').click()`,
   );
   await wait(window, `document.body.innerText.includes('handoff.md')`);
@@ -134,6 +146,11 @@ const wait = async (w, expression) => {
     0,
   );
   server = createServer((req, res) => {
+    if (req.method === "GET") {
+      res.setHeader("Content-Type", "text/html;charset=utf-8");
+      res.end(require("node:fs").readFileSync("tests/fixtures/customers.html"));
+      return;
+    }
     let body = "";
     req.on("data", (chunk) => (body += chunk));
     req.on("end", () => {
@@ -145,8 +162,18 @@ const wait = async (w, expression) => {
       const data = JSON.parse(body);
       if (data.stream) {
         res.writeHead(200, { "Content-Type": "text/event-stream" });
+        const content = data.messages[0].content.includes("原型工程师")
+          ? require("node:fs").readFileSync(
+              "tests/fixtures/customers.html",
+              "utf8",
+            )
+          : data.messages[0].content.includes("Markdown PRD")
+            ? "# 客户管理 PRD\n\n## 目标\n支持筛选和新增客户。\n\n## 待确认\n权限规则待确认。"
+            : "模型流式响应已验证";
         res.end(
-          'data: {"choices":[{"delta":{"content":"模型流式响应已验证"}}]}\n\ndata: [DONE]\n\n',
+          "data: " +
+            JSON.stringify({ choices: [{ delta: { content } }] }) +
+            "\n\ndata: [DONE]\n\n",
         );
       } else {
         res.setHeader("Content-Type", "application/json");
@@ -188,10 +215,172 @@ const wait = async (w, expression) => {
     "docs/verification/desktop-model.png",
     (await wc.capturePage()).toPNG(),
   );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('[role=tab]')).find(b=>b.textContent==='浏览器').click()`,
+  );
+  await wait(
+    window,
+    `document.querySelector('[aria-label="页面地址"]')!==null`,
+  );
+  await wc.executeJavaScript(
+    `Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(document.querySelector('[aria-label="页面地址"]'),'http://127.0.0.1:${server.address().port}/customers');document.querySelector('[aria-label="页面地址"]').dispatchEvent(new Event('input',{bubbles:true}));`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='打开网页').click()`,
+  );
+  await wait(
+    window,
+    `!Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='采集当前状态').disabled`,
+  );
+  await new Promise((r) => setTimeout(r, 200));
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='采集当前状态').click()`,
+  );
+  await wait(
+    window,
+    `document.querySelector('[aria-label="页面依据"]').options.length===2`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='依据此状态生成原型').click()`,
+  );
+  await wait(
+    window,
+    `document.querySelector('[aria-label="原型版本"]')?.options.length===1 && !Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='通过此版本').disabled`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='通过此版本').click()`,
+  );
+  await wait(
+    window,
+    `Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='此版本已通过')`,
+  );
+  await wc.executeJavaScript(
+    `Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(document.querySelector('textarea'),'调整客户列表标题');document.querySelector('textarea').dispatchEvent(new Event('input',{bubbles:true}));`,
+  );
+  await wait(
+    window,
+    `!document.querySelector('[aria-label="发送修改要求"]').disabled`,
+  );
+  await wc.executeJavaScript(
+    `document.querySelector('[aria-label="发送修改要求"]').click()`,
+  );
+  await wait(
+    window,
+    `document.querySelector('[aria-label="原型版本"]')?.options.length===2`,
+  );
+  const versionList = await wc.executeJavaScript(
+    `window.produck.workbench.versions(${JSON.stringify(first.id)})`,
+  );
+  assert.equal(versionList[0].approved, false);
+  assert.equal(versionList[1].approved, true);
+  assert.equal(
+    (
+      await wc.executeJavaScript(
+        `window.produck.projects.pageMemory(${JSON.stringify(first.id)},'客户')`,
+      )
+    ).length,
+    1,
+  );
+  await new Promise((r) => setTimeout(r, 200));
+  writeFileSync(
+    "docs/verification/desktop-workbench.png",
+    (await wc.capturePage()).toPNG(),
+  );
+  const prototypeContents = webContents
+    .getAllWebContents()
+    .find((w) => w.getURL().startsWith("data:"));
+  assert(prototypeContents);
+  assert.equal(
+    await prototypeContents.executeJavaScript(
+      "document.querySelector('h1').textContent",
+    ),
+    "客户列表",
+  );
+  const prototypeView = window.contentView.children.find(
+    (v) => v.webContents === prototypeContents,
+  );
+  assert(prototypeView && prototypeView.getBounds().width > 100);
+  writeFileSync(
+    "docs/verification/desktop-prototype.png",
+    (await prototypeContents.capturePage()).toPNG(),
+  );
+  await assert.rejects(
+    wc.executeJavaScript(
+      `window.produck.documents.generate(${JSON.stringify(first.id)},${JSON.stringify(versionList[0].id)},['x'],'')`,
+    ),
+    /先通过/,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='通过此版本').click()`,
+  );
+  await wait(window, `!!document.querySelector('[aria-label="页面状态名称"]')`);
+  await wc.executeJavaScript(
+    `Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(document.querySelector('[aria-label="页面状态名称"]'),'客户列表默认状态');document.querySelector('[aria-label="页面状态名称"]').dispatchEvent(new Event('input',{bubbles:true}));`,
+  );
+  await wait(
+    window,
+    `!Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='保存文档截图').disabled`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='保存文档截图').click()`,
+  );
+  await wait(window, `document.body.innerText.includes('可在文档中选择')`);
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('nav button')).find(b=>b.textContent.includes('文档')).click()`,
+  );
+  await wait(window, `!!document.querySelector('.state-choice input')`);
+  await wc.executeJavaScript(
+    `document.querySelector('.state-choice input').click()`,
+  );
+  await wait(
+    window,
+    `!Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='生成 PRD 草稿').disabled`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='生成 PRD 草稿').click()`,
+  );
+  await wait(
+    window,
+    `document.querySelector('.document-text')?.textContent.includes('客户管理 PRD') && document.querySelector('.document-image')?.complete`,
+  );
+  dialog.showSaveDialog = async () => ({
+    canceled: false,
+    filePath: join(root, "exported-prd.html"),
+  });
+  const drafts = await wc.executeJavaScript(
+    `window.produck.documents.list(${JSON.stringify(first.id)})`,
+  );
+  assert.equal(drafts[0].versionId, versionList[0].id);
+  await wc.executeJavaScript(
+    `window.produck.documents.export(${JSON.stringify(first.id)},${JSON.stringify(drafts[0].id)})`,
+  );
+  assert.match(
+    readFileSync(join(root, "exported-prd.html"), "utf8"),
+    /data:image\/png;base64,/,
+  );
+  await wc.executeJavaScript(
+    "document.querySelector('.document-text').scrollIntoView({block:'start'}); new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))",
+  );
+  writeFileSync(
+    "docs/verification/desktop-documents.png",
+    (await wc.capturePage()).toPNG(),
+  );
+  const tasks = await wc.executeJavaScript(
+    `window.produck.workbench.tasks(${JSON.stringify(first.id)})`,
+  );
+  assert.equal(tasks.length, 2);
+  assert(tasks.every((t) => t.state === "succeeded" && !t.recoverable));
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('nav button')).find(b=>b.textContent.includes('工作流')).click()`,
+  );
+  await wait(
+    window,
+    `document.body.innerText.includes('原型生成记录') && document.body.innerText.includes('已保存候选')`,
+  );
   assert.equal(await wc.executeJavaScript("typeof require"), "undefined");
   assert.equal(errors.length, 0, errors.join("\n"));
   console.log(
-    "PASS: Electron UI project create/select/reload, scoped connections/sources, source import, keychain model configuration, API test and streamed chat",
+    "PASS: Electron UI project create/select/reload, scoped connections/sources, source import, keychain model configuration, API test, streamed chat, capture, prototype generation/approval/edit, approved PRD screenshots/export and task history",
   );
   await cleanup();
   app.quit();

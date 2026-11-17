@@ -14,6 +14,7 @@
     "src/contracts",
     "src/projects",
     "src/integrations",
-    "src/agent"
+    "src/agent",
+    "src/prototypes"
   ]
 }

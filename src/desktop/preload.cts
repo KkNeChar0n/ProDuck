@@ -3,6 +3,24 @@ contextBridge.exposeInMainWorld(
   "produck",
   Object.freeze({
     getInfo: () => ipcRenderer.invoke("app:info"),
+    documents: {
+      images: (id: string, draftId: string) =>
+        ipcRenderer.invoke("documents:images", id, draftId),
+      states: (id: string) => ipcRenderer.invoke("documents:states", id),
+      saveState: (id: string, versionId: string, label: string) =>
+        ipcRenderer.invoke("documents:save-state", id, versionId, label),
+      list: (id: string) => ipcRenderer.invoke("documents:list", id),
+      generate: (
+        id: string,
+        versionId: string,
+        stateIds: string[],
+        goal: string,
+      ) =>
+        ipcRenderer.invoke("documents:generate", id, versionId, stateIds, goal),
+      export: (id: string, draftId: string) =>
+        ipcRenderer.invoke("documents:export", id, draftId),
+      cancel: (id: string) => ipcRenderer.invoke("documents:cancel", id),
+    },
     models: {
       profile: (id: string) => ipcRenderer.invoke("models:profile", id),
       save: (id: string, input: unknown) =>
@@ -17,6 +35,56 @@ contextBridge.exposeInMainWorld(
         return () => ipcRenderer.removeListener("models:delta", listener);
       },
     },
+    workbench: {
+      open: (id: string, url: string) =>
+        ipcRenderer.invoke("browser:open", id, url),
+      showBrowser: (id: string, bounds: unknown) =>
+        ipcRenderer.invoke("browser:show", id, bounds),
+      hide: () => ipcRenderer.invoke("surface:hide"),
+      capture: (id: string) => ipcRenderer.invoke("browser:capture", id),
+      captures: (id: string) => ipcRenderer.invoke("browser:captures", id),
+      revealCapture: (id: string, captureId: string) =>
+        ipcRenderer.invoke("browser:reveal", id, captureId),
+      action: (id: string, action: string, selector: string, value?: string) =>
+        ipcRenderer.invoke("browser:action", id, action, selector, value),
+      tasks: (id: string) => ipcRenderer.invoke("prototypes:tasks", id),
+      retry: (id: string, runId: string) =>
+        ipcRenderer.invoke("prototypes:retry", id, runId),
+      compare: (id: string, before: string, after: string) =>
+        ipcRenderer.invoke("prototypes:compare", id, before, after),
+      selectionMode: (id: string, enabled: boolean) =>
+        ipcRenderer.invoke("prototypes:selection-mode", id, enabled),
+      selection: (id: string) => ipcRenderer.invoke("prototypes:selection", id),
+      versions: (id: string) => ipcRenderer.invoke("prototypes:list", id),
+      generate: (
+        id: string,
+        captureId: string,
+        change?: string,
+        baselineId?: string,
+      ) =>
+        ipcRenderer.invoke(
+          "prototypes:generate",
+          id,
+          captureId,
+          change,
+          baselineId,
+        ),
+      cancel: (id: string) => ipcRenderer.invoke("prototypes:cancel", id),
+      loadPrototype: (id: string, versionId: string) =>
+        ipcRenderer.invoke("prototypes:load", id, versionId),
+      showPrototype: (id: string, bounds: unknown) =>
+        ipcRenderer.invoke("prototypes:show", id, bounds),
+      approve: (id: string, versionId: string) =>
+        ipcRenderer.invoke("prototypes:approve", id, versionId),
+      restore: (id: string, versionId: string) =>
+        ipcRenderer.invoke("prototypes:restore", id, versionId),
+      onProgress: (callback: (data: unknown) => void) => {
+        const listener = (_e: unknown, data: unknown) => callback(data);
+        ipcRenderer.on("prototypes:progress", listener);
+        return () =>
+          ipcRenderer.removeListener("prototypes:progress", listener);
+      },
+    },
     projects: {
       sources: (id: string) => ipcRenderer.invoke("projects:sources", id),
       importSource: (id: string) =>
@@ -28,6 +96,10 @@ contextBridge.exposeInMainWorld(
         ipcRenderer.invoke("projects:connections", id),
       saveConnection: (id: string, input: unknown) =>
         ipcRenderer.invoke("projects:save-connection", id, input),
+      confirmMemory: (id: string, captureId: string) =>
+        ipcRenderer.invoke("projects:confirm-memory", id, captureId),
+      pageMemory: (id: string, query: string) =>
+        ipcRenderer.invoke("projects:page-memory", id, query),
       memory: (id: string) => ipcRenderer.invoke("projects:memory", id),
       reveal: (id: string) => ipcRenderer.invoke("projects:reveal", id),
     },

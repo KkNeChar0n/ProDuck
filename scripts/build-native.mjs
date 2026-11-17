@@ -11,6 +11,8 @@ const result = spawnSync(
     "swiftc",
     "native/Keychain.swift",
     "-O",
+    "-target",
+    `${process.arch === "arm64" ? "arm64" : "x86_64"}-apple-macosx13.0`,
     "-module-cache-path",
     join(tmpdir(), "produck-swift-module-cache"),
     "-o",

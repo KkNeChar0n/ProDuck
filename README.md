@@ -2,7 +2,7 @@
 
 面向产品经理的 macOS Agent：理解页面、调整可操作原型、撰写需求文档并推进工作流。
 
-当前处于 MVP 实施阶段，尚未提供可用的正式 Agent 或安装包。
+当前处于 MVP 实施阶段。已生成 arm64 本地开发测试包，尚不是完整或可公开分发的 Agent。
 
 ## 已有成果
 
@@ -10,7 +10,10 @@
 - [可操作工作台原型](prototypes/produck-workbench/index.html)：米白色三栏布局，项目/模型配置演示、页面交互、示例 prompt 修改、版本确认与文档流程。
 - 已接入真实项目状态的 Electron + React + TypeScript 工作台：创建与切换项目、独立工作空间、连接地址及资料导入。
 - 项目级模型配置、macOS 钥匙串凭证、连接测试与流式文本问答；支持 OpenAI-compatible 和 Anthropic 文本协议。
-- 隔离 IPC、浏览器登录与采集技术验证、本地 SQLite schema 和原子文件存储。
+- 项目隔离浏览器、网页文字/结构/样式/截图采集，有来源的记忆与确认冲突展示。
+- 单文件模拟原型生成、页面 prompt 修改、带 ID 的元素选择、版本确认/恢复/源文件对比、失败任务显式重试。
+- 根据批准版本保存状态截图、生成本地 PRD 草稿并导出含截图 HTML；未批准候选不能进入文档流程。
+- 隔离 IPC、原型网络限制、本地 SQLite schema 和原子文件存储。
 
 ## 体验界面原型
 
@@ -42,6 +45,7 @@ npm run dev
 # 使用独立临时 profile 和本地模拟网站验证 Electron
 npm run test:browser-spike
 npm run test:desktop
+npm run test:workbench
 
 # 原型服务已启动且测试机安装 Python Playwright/Chromium 后
 python3 tests/prototype_smoke.py
@@ -56,10 +60,20 @@ python3 tests/prototype_smoke.py
 - `prototypes`：用户界面演示，与真实应用功能明确分开。
 - `scripts`、`tests`：开发验证，不作为用户运行依赖。
 
-后续按实际任务新增 Agent、原型、工作流与集成模块，不提前创建空模块或拆分微服务。
+`src/agent`、`src/prototypes`、`src/workflows` 和 `src/integrations` 分别承载模型生成、版本管理、本地文档和凭证能力。
 
 ## 进度和限制
 
-[任务清单](openspec/changes/produck-mvp/tasks.md) 按验收结果勾选。界面已获用户确认；模型调用已通过本地 API 联调，真实供应商连接待用户配置验证。当前每条提问独立发送，不保存对话历史。网页重建、平台集成、完整技能运行器和安装包仍未完成。
+[任务清单](openspec/changes/produck-mvp/tasks.md) 按验证结果勾选。界面已获用户确认；模型与原型、PRD 流程通过本地模拟 API 测试。用户已要求暂时跳过真实模型验证，因此重建视觉与交互质量未验收。普通问答仍为独立请求，不保存对话历史。
 
-验证记录位于 [docs/verification](docs/verification/)。当前原型和技术探针的成功不等于完整 MVP 已可用。
+飞书/云效发布、完整技能运行器、通用 Agent 工具循环和干净机器验收尚未完成。详见 [本次验证记录](docs/verification/prototype-workflow.md)。
+
+## macOS 开发测试包
+
+```sh
+npm run package:mac
+```
+
+输出 `release/Produck-0.1.0-arm64-test.dmg`，包含 Electron、编译后的钥匙串程序与应用资源。目标最低系统为 macOS 13，当前只在 macOS 26.3 arm64 上构建和检查；尚未在最低系统或无开发工具的机器完成验收。
+
+包使用临时签名，未完成 Developer ID 签名和公证，不用于公开分发。安装包未提交 Git；第三方运行组件许可证随包保存。打包验证不代表真实模型与平台集成已通过。

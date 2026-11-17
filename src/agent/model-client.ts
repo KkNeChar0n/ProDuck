@@ -6,6 +6,7 @@ export interface ModelRequest {
   token: string;
   prompt: string;
   signal?: AbortSignal;
+  maxTokens?: number;
 }
 export function validateEndpoint(input: string): string {
   const url = new URL(input);
@@ -25,7 +26,7 @@ function requestBody(input: ModelRequest, stream: boolean) {
   return input.provider === "anthropic"
     ? {
         model: input.model,
-        max_tokens: 1024,
+        max_tokens: input.maxTokens ?? 1024,
         stream,
         messages: [{ role: "user", content: input.prompt }],
       }
@@ -64,10 +65,23 @@ async function send(
     );
   } catch (error) {
     if (input.signal?.aborted) throw new Error("已取消");
+    const cause = error instanceof Error ? error.cause : undefined;
+    const code =
+      cause && typeof cause === "object" && "code" in cause
+        ? String(cause.code)
+        : "";
+    const safeCode =
+      /^(?:E[A-Z_]+|UND_ERR_[A-Z_]+|CERT_[A-Z_]+|DEPTH_ZERO_SELF_SIGNED_CERT|SELF_SIGNED_CERT_IN_CHAIN)$/.test(
+        code,
+      )
+        ? `（${code}）`
+        : "";
+    if (cause instanceof Error && cause.message === "unexpected redirect")
+      throw new Error("模型接口发生重定向，请将 Base URL 设置为最终 API 地址");
     throw new Error(
       error instanceof Error && error.name === "TimeoutError"
         ? "模型请求超时，请重试"
-        : "无法连接模型服务，请检查地址和网络",
+        : `无法连接模型服务${safeCode}，请检查地址和网络`,
     );
   }
   if (response.status === 401 || response.status === 403)

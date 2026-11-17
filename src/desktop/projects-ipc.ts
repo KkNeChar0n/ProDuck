@@ -1,3 +1,4 @@
+import { searchPageMemory, confirmPageMemory } from "../projects/captures.js";
 import { listSources, importSource } from "../projects/sources.js";
 import {
   dialog,
@@ -57,6 +58,12 @@ export function registerProjectIpc(
     "projects:save-connection",
     (id: string, connection: ProjectConnection) =>
       repository.saveConnection(id, connection),
+  );
+  handle("projects:confirm-memory", (id: string, captureId: string) =>
+    confirmPageMemory(repository.get(id).workspace, captureId),
+  );
+  handle("projects:page-memory", (id: string, query: string) =>
+    searchPageMemory(repository.get(id).workspace, query),
   );
   handle("projects:memory", (id: string) => repository.readMemory(id));
   handle("projects:reveal", (id: string) => {

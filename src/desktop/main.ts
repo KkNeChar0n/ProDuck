@@ -1,3 +1,4 @@
+import { registerWorkbenchIpc } from "./workbench-ipc.js";
 import { app, BrowserWindow, ipcMain } from "electron";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
@@ -48,10 +49,15 @@ else
     const credentials = new MacKeychain(
       join(here, "../native/produck-keychain"),
     );
-    const stopModels = registerModelIpc(
-      new ModelService(database, credentials),
+    const modelService = new ModelService(database, credentials);
+    const stopModels = registerModelIpc(modelService, () => window);
+    const stopWorkbench = registerWorkbenchIpc(
+      database,
+      repository,
+      modelService,
       () => window,
     );
+    app.on("before-quit", stopWorkbench);
     app.on("before-quit", stopModels);
     app.on("will-quit", () => database.close());
     app.on("second-instance", () => {
