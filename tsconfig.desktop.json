@@ -9,5 +9,11 @@
     "skipLibCheck": true,
     "esModuleInterop": true
   },
-  "include": ["src/desktop", "src/contracts", "src/projects"]
+  "include": [
+    "src/desktop",
+    "src/contracts",
+    "src/projects",
+    "src/integrations",
+    "src/agent"
+  ]
 }

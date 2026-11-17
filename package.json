@@ -7,13 +7,15 @@
   "main": "dist/desktop/main.js",
   "scripts": {
     "dev": "npm run build && node scripts/run-electron.mjs .",
-    "build": "tsc -p tsconfig.desktop.json && vite build",
+    "build": "npm run build:native && tsc -p tsconfig.desktop.json && vite build",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.desktop.json --noEmit",
     "test": "node --import tsx --test tests/*.test.ts",
     "test:browser-spike": "node scripts/run-electron.mjs scripts/browser-spike.cjs",
     "preview:prototype": "python3 -m http.server 4173 --bind 127.0.0.1 --directory prototypes/produck-workbench",
     "format": "prettier --write src scripts prototypes tests/*.ts *.json vite.config.ts",
-    "format:check": "prettier --check src scripts prototypes tests/*.ts *.json vite.config.ts"
+    "format:check": "prettier --check src scripts prototypes tests/*.ts *.json vite.config.ts",
+    "test:desktop": "node scripts/run-electron.mjs scripts/desktop-smoke.cjs",
+    "build:native": "node scripts/build-native.mjs"
   },
   "dependencies": {
     "react": "19.3.1",

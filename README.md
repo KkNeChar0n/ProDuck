@@ -8,7 +8,8 @@
 
 - [OpenSpec 提案与设计](openspec/changes/produck-mvp/)
 - [可操作工作台原型](prototypes/produck-workbench/index.html)：米白色三栏布局，项目/模型配置演示、页面交互、示例 prompt 修改、版本确认与文档流程。
-- Electron + React + TypeScript 桌面工程；桌面窗口目前是基础启动页，尚未接入原型界面。
+- 已接入真实项目状态的 Electron + React + TypeScript 工作台：创建与切换项目、独立工作空间、连接地址及资料导入。
+- 项目级模型配置、macOS 钥匙串凭证、连接测试与流式文本问答；支持 OpenAI-compatible 和 Anthropic 文本协议。
 - 隔离 IPC、浏览器登录与采集技术验证、本地 SQLite schema 和原子文件存储。
 
 ## 体验界面原型
@@ -27,7 +28,7 @@ npm run preview:prototype
 
 ## 开发
 
-开发机需要 Node.js 24.14+、npm，以及 macOS arm64。正式应用目标是安装后无需这些开发工具。
+开发机需要 Node.js 24.14+、npm、Xcode Command Line Tools（编译钥匙串程序），以及 macOS arm64。正式应用目标是安装后无需这些开发工具。
 
 ```sh
 npm ci
@@ -40,6 +41,7 @@ npm run dev
 ```sh
 # 使用独立临时 profile 和本地模拟网站验证 Electron
 npm run test:browser-spike
+npm run test:desktop
 
 # 原型服务已启动且测试机安装 Python Playwright/Chromium 后
 python3 tests/prototype_smoke.py
@@ -58,6 +60,6 @@ python3 tests/prototype_smoke.py
 
 ## 进度和限制
 
-[任务清单](openspec/changes/produck-mvp/tasks.md) 按验收结果勾选。界面用户验收、真实模型调用、真实网页重建、平台集成、完整技能运行器和安装包仍未完成。
+[任务清单](openspec/changes/produck-mvp/tasks.md) 按验收结果勾选。界面已获用户确认；模型调用已通过本地 API 联调，真实供应商连接待用户配置验证。当前每条提问独立发送，不保存对话历史。网页重建、平台集成、完整技能运行器和安装包仍未完成。
 
 验证记录位于 [docs/verification](docs/verification/)。当前原型和技术探针的成功不等于完整 MVP 已可用。
