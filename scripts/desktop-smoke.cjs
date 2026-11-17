@@ -557,6 +557,45 @@ const wait = async (w, expression) => {
     "docs/verification/desktop-platforms.png",
     (await wc.capturePage()).toPNG(),
   );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('nav button')).find(b=>b.textContent.includes('文档')).click()`,
+  );
+  await wait(
+    window,
+    `Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='准备发布审阅包')`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='准备发布审阅包').click()`,
+  );
+  await wait(
+    window,
+    `document.body.innerText.includes('目标父节点：平台连接测试迭代')`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='确认材料与父节点').click()`,
+  );
+  await wait(window, `document.body.innerText.includes('已确认材料，未发布')`);
+  const reviewList = await wc.executeJavaScript(
+    `window.produck.publication.list(${JSON.stringify(first.id)})`,
+  );
+  assert.equal(reviewList[0].status, "approved");
+  assert.equal(reviewList[0].draftId, drafts[0].id);
+  assert.equal(reviewList[0].files.length, 3);
+  assert.equal(
+    (
+      await wc.executeJavaScript(
+        `window.produck.publication.list(${JSON.stringify(second.id)})`,
+      )
+    ).length,
+    0,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('h3')).find(h=>h.textContent==='发布材料审阅').scrollIntoView({block:'start'});new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`,
+  );
+  writeFileSync(
+    "docs/verification/desktop-publication-review.png",
+    (await wc.capturePage()).toPNG(),
+  );
   assert.equal(await wc.executeJavaScript("typeof require"), "undefined");
   assert.equal(errors.length, 0, errors.join("\n"));
   console.log(

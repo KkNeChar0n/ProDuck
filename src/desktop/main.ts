@@ -51,10 +51,8 @@ else
     const credentials = new MacKeychain(
       join(here, "../native/produck-keychain"),
     );
-    registerPlatformIpc(
-      new PlatformService(database, credentials),
-      () => window,
-    );
+    const platforms = new PlatformService(database, credentials);
+    registerPlatformIpc(platforms, () => window);
     const modelService = new ModelService(database, credentials);
     const stopModels = registerModelIpc(modelService, () => window);
     const stopWorkbench = registerWorkbenchIpc(
@@ -62,6 +60,7 @@ else
       repository,
       modelService,
       () => window,
+      platforms,
     );
     app.on("before-quit", stopWorkbench);
     app.on("before-quit", stopModels);

@@ -1,3 +1,5 @@
+import { PublicationReviews } from "../workflows/publication-review.js";
+import type { PlatformService } from "../integrations/platform-service.js";
 import { SkillRepository } from "../skills/repository.js";
 import { registerSkillsIpc } from "./skills-ipc.js";
 import type { PrototypeCheckKey } from "../contracts/workbench.js";
@@ -31,6 +33,7 @@ export function registerWorkbenchIpc(
   projects: ProjectRepository,
   models: ModelService,
   getWindow: () => BrowserWindow | null,
+  platforms?: PlatformService,
 ) {
   const browser = new BrowserSurface(getWindow),
     preview = new PrototypeSurface(getWindow),
@@ -61,6 +64,33 @@ export function registerWorkbenchIpc(
   );
   registerAgentIpc(agent, getWindow);
   const documents = new DocumentWorkflow(projects, versions, models);
+  if (platforms) {
+    const reviews = new PublicationReviews(
+      projects,
+      versions,
+      documents,
+      platforms,
+    );
+    ipcMain.handle("publication:list", (e, id: string) => {
+      trusted(e, id);
+      return reviews.list(id);
+    });
+    ipcMain.handle("publication:prepare", (e, id: string, draftId: string) => {
+      trusted(e, id);
+      return reviews.prepare(id, draftId);
+    });
+    ipcMain.handle(
+      "publication:approve",
+      (e, id: string, reviewId: string, digest: string) => {
+        trusted(e, id);
+        return reviews.approve(id, reviewId, digest);
+      },
+    );
+    ipcMain.handle("publication:reveal", (e, id: string, reviewId: string) => {
+      trusted(e, id);
+      shell.showItemInFolder(reviews.directory(id, reviewId));
+    });
+  }
   let previewVersion: string | null = null;
   let previewProject: string | null = null;
   function trusted(e: IpcMainInvokeEvent, id?: string) {

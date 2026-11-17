@@ -1,3 +1,4 @@
+import { PublicationReviewPanel } from "./PublicationReviewPanel";
 import { useEffect, useState } from "react";
 import type { DocumentDraft, PrototypeState } from "../../contracts/documents";
 import type { PrototypeVersion } from "../../contracts/workbench";
@@ -189,6 +190,11 @@ export function Documents({ projectId }: { projectId: string }) {
           >
             导出含截图的 HTML
           </button>
+          <PublicationReviewPanel
+            key={`${projectId}-${draft.id}`}
+            projectId={projectId}
+            draftId={draft.id}
+          />
         </>
       )}
     </article>

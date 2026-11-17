@@ -2,6 +2,15 @@ import { contextBridge, ipcRenderer } from "electron";
 contextBridge.exposeInMainWorld(
   "produck",
   Object.freeze({
+    publication: {
+      list: (id: string) => ipcRenderer.invoke("publication:list", id),
+      prepare: (id: string, draftId: string) =>
+        ipcRenderer.invoke("publication:prepare", id, draftId),
+      approve: (id: string, reviewId: string, digest: string) =>
+        ipcRenderer.invoke("publication:approve", id, reviewId, digest),
+      reveal: (id: string, reviewId: string) =>
+        ipcRenderer.invoke("publication:reveal", id, reviewId),
+    },
     platforms: {
       profile: (id: string, provider: string) =>
         ipcRenderer.invoke("platforms:profile", id, provider),
