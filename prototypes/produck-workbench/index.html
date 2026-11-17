@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Produck · 产品工作台</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="titlebar">
+        <div class="traffic" aria-hidden="true"><i></i><i></i><i></i></div>
+        <button class="icon" id="toggle-nav" aria-label="收起或展开导航">
+          ☷</button
+        ><strong class="wordmark">produck<span class="brand-dot"></span></strong
+        ><span class="title-path">你的产品工作空间</span
+        ><span class="demo-badge">交互演示 · 不连接真实服务</span
+        ><button id="model-button" class="quiet">配置模型</button>
+      </header>
+      <aside class="sidebar">
+        <div class="project-label">
+          当前项目<button class="icon" id="new-project" aria-label="创建项目">
+            ＋
+          </button>
+        </div>
+        <select id="project-select" aria-label="切换项目"></select>
+        <nav id="navigation">
+          <button class="nav active" data-view="workbench">
+            <span>▧</span>工作台</button
+          ><button class="nav" data-view="memory"><span>▤</span>项目记忆</button
+          ><button class="nav" data-view="documents"><span>▱</span>文档</button
+          ><button class="nav" data-view="workflow"><span>⑂</span>工作流</button
+          ><button class="nav" data-view="skills"><span>✧</span>Skills</button>
+        </nav>
+        <div class="sidebar-section">本次任务</div>
+        <div class="task-entry">
+          <span class="live-dot"></span><span id="task-name">优化客户筛选</span>
+        </div>
+        <div class="sidebar-note">
+          从一个页面开始，<br />让想法成为可交付的方案。
+        </div>
+        <button class="nav bottom" data-view="settings">
+          <span>⚙</span>项目设置
+        </button>
+        <div class="profile">
+          <span class="avatar">C</span>
+          <div>本地工作空间<small>文件由你掌握</small></div>
+        </div>
+      </aside>
+      <main class="workspace">
+        <section class="work-heading">
+          <div>
+            <div class="breadcrumb">
+              <span id="project-heading">客户管理平台</span
+              ><span> / </span>工作台
+            </div>
+            <h1 id="page-heading">优化客户筛选</h1>
+          </div>
+          <button class="quiet" id="history-button">
+            版本记录 <span id="version-count">1</span>
+          </button>
+        </section>
+        <div class="workspace-body" id="workspace-body"></div>
+        <footer class="stagebar">
+          <div>
+            <span class="stage-dot"></span
+            ><span id="stage-label">原型待确认</span
+            ><small id="stage-detail">先体验交互，再确认这个版本</small>
+          </div>
+          <button id="primary-action" class="primary">通过此版本</button>
+        </footer>
+      </main>
+      <aside class="agent-panel">
+        <header>
+          <div><span class="agent-symbol">✳</span><strong>Produck</strong></div>
+          <span class="muted">与你一起完成</span>
+        </header>
+        <div class="task-progress">
+          <span class="done">理解页面</span><i></i
+          ><span class="current">调整原型</span><i></i><span>撰写文档</span>
+        </div>
+        <div id="messages" class="messages" aria-live="polite"></div>
+        <div class="composer">
+          <div id="selection-context" class="context-chip">
+            ▧ 客户列表 · 整个页面
+          </div>
+          <form id="prompt-form">
+            <textarea
+              id="prompt"
+              aria-label="修改要求"
+              placeholder="描述你想调整的地方…"
+              rows="4"
+            ></textarea>
+            <div class="composer-actions">
+              <button type="button" id="sample-prompt" class="quiet">
+                试试添加状态筛选</button
+              ><button class="send" id="send-button" aria-label="发送修改要求">
+                ↑</button
+              ><button type="button" id="cancel-run" hidden>取消</button>
+            </div>
+          </form>
+          <small>演示支持：状态筛选、修改标题、紧凑表格</small>
+        </div>
+      </aside>
+    </div>
+    <dialog id="dialog"><div id="dialog-body"></div></dialog>
+    <div id="toast" role="status" hidden></div>
+    <script src="app.js"></script>
+  </body>
+</html>

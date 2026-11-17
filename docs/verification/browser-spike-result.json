@@ -1,0 +1,22 @@
+{
+  "status": "passed",
+  "electron": "45.3.3",
+  "checks": [
+    "fixture login form submission",
+    "httpOnly session not exposed",
+    "DOM capture",
+    "filter interaction",
+    "required form validation",
+    "mock submit result",
+    "PNG capture",
+    "same-project view recreation retains session",
+    "other-project session isolated",
+    "remote view has no Node or Produck bridge",
+    "sandboxed shell preload IPC"
+  ],
+  "limitations": [
+    "uses local login fixture; real SSO/CAPTCHA not verified",
+    "session recreation checked within one process; cross-process persistence not yet verified",
+    "does not test AI reconstruction"
+  ]
+}

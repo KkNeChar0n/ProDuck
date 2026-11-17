@@ -1,0 +1,50 @@
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+  color: #292e29;
+  background: #f6f4ec;
+}
+body {
+  margin: 0;
+}
+main {
+  max-width: 720px;
+  margin: 15vh auto;
+  padding: 40px;
+}
+.mark {
+  font-size: 30px;
+  font-weight: 650;
+  letter-spacing: -1px;
+}
+.mark span {
+  font-size: 13px;
+  color: #e8c76a;
+  margin-left: 5px;
+}
+h1 {
+  font-size: 30px;
+  font-weight: 550;
+  margin-top: 45px;
+}
+p {
+  line-height: 1.9;
+  color: #73776c;
+}
+dl {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  border-block: 1px solid #dedfd4;
+  padding: 24px 0;
+  gap: 18px;
+  font-size: 14px;
+}
+dd {
+  margin: 0;
+  color: #315543;
+}
+dt {
+  color: #73776c;
+}
+.note {
+  font-size: 12px;
+}

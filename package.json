@@ -1,0 +1,33 @@
+{
+  "name": "produck",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A local-first product manager agent for macOS",
+  "type": "module",
+  "main": "dist/desktop/main.js",
+  "scripts": {
+    "dev": "npm run build && node scripts/run-electron.mjs .",
+    "build": "tsc -p tsconfig.desktop.json && vite build",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.desktop.json --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "test:browser-spike": "node scripts/run-electron.mjs scripts/browser-spike.cjs",
+    "preview:prototype": "python3 -m http.server 4173 --bind 127.0.0.1 --directory prototypes/produck-workbench",
+    "format": "prettier --write src scripts prototypes tests/*.ts *.json vite.config.ts",
+    "format:check": "prettier --check src scripts prototypes tests/*.ts *.json vite.config.ts"
+  },
+  "dependencies": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.3.0",
+    "electron": "45.3.3",
+    "prettier": "3.10.1",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vite": "8.3.8"
+  }
+}
