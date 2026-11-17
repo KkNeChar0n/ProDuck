@@ -2,6 +2,14 @@ import { contextBridge, ipcRenderer } from "electron";
 contextBridge.exposeInMainWorld(
   "produck",
   Object.freeze({
+    platforms: {
+      profile: (id: string, provider: string) =>
+        ipcRenderer.invoke("platforms:profile", id, provider),
+      save: (id: string, input: unknown) =>
+        ipcRenderer.invoke("platforms:save", id, input),
+      test: (id: string, provider: string) =>
+        ipcRenderer.invoke("platforms:test", id, provider),
+    },
     skills: {
       list: (id: string) => ipcRenderer.invoke("skills:list", id),
       import: (id: string) => ipcRenderer.invoke("skills:import", id),

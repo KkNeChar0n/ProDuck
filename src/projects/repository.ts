@@ -111,6 +111,13 @@ export class ProjectRepository {
       url.hash
     )
       throw new Error("请使用不含凭证、参数和锚点的 HTTPS 地址");
+    const existing = this.db
+      .prepare(
+        "SELECT credential_ref FROM connections WHERE project_id=? AND provider=?",
+      )
+      .get(id, input.provider);
+    if (existing?.credential_ref)
+      throw new Error("已配置平台凭证，请通过平台连接设置更新地址");
     this.db
       .prepare(
         "INSERT INTO connections(id,project_id,provider,config_json) VALUES(?,?,?,?) ON CONFLICT(project_id,provider) DO UPDATE SET config_json=excluded.config_json",

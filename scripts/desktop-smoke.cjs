@@ -12,14 +12,23 @@ const assert = require("node:assert/strict");
 const { createServer } = require("node:http");
 let server,
   credentialRef,
+  platformCredentialRef,
   plannerCalls = 0;
 async function cleanup() {
   if (credentialRef) {
     const { MacKeychain } = await import("../dist/integrations/credentials.js");
     await new MacKeychain(resolve("dist/native/produck-keychain")).delete(
       credentialRef,
+      platformCredentialRef,
     );
     credentialRef = null;
+  }
+  if (platformCredentialRef) {
+    const { MacKeychain } = await import("../dist/integrations/credentials.js");
+    await new MacKeychain(resolve("dist/native/produck-keychain")).delete(
+      platformCredentialRef,
+    );
+    platformCredentialRef = null;
   }
   if (server) server.close();
 }
@@ -54,6 +63,38 @@ const wait = async (w, expression) => {
   throw new Error("UI condition timed out: " + expression);
 };
 (async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    if (String(url).startsWith("https://open.feishu.cn/")) {
+      if (String(url).includes("tenant_access_token")) {
+        assert.equal(
+          JSON.parse(init.body).app_secret,
+          "synthetic-platform-secret",
+        );
+        return new Response(
+          JSON.stringify({ code: 0, tenant_access_token: "synthetic-tenant" }),
+        );
+      }
+      assert.equal(
+        String(url),
+        "https://open.feishu.cn/open-apis/wiki/v2/spaces/get_node?token=fixture",
+      );
+      return new Response(
+        JSON.stringify({
+          code: 0,
+          data: {
+            node: {
+              node_token: "fixture",
+              space_id: "space1",
+              obj_type: "docx",
+              title: "平台连接测试迭代",
+            },
+          },
+        }),
+      );
+    }
+    return originalFetch(url, init);
+  };
   await import(pathToFileURL(resolve("dist/desktop/main.js")).href);
   const window = await ready;
   const wc = window.webContents;
@@ -470,6 +511,50 @@ const wait = async (w, expression) => {
   );
   writeFileSync(
     "docs/verification/desktop-agent.png",
+    (await wc.capturePage()).toPNG(),
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent.trim()==='项目设置').click()`,
+  );
+  await wait(window, `document.querySelector('input[name=appId]') !== null`);
+  await wc.executeJavaScript(
+    `document.querySelector('input[name=appId]').value='cli_fixture';document.querySelector('input[name=appId]').form.querySelector('input[name=secret]').value='synthetic-platform-secret';document.querySelector('input[name=appId]').form.requestSubmit()`,
+  );
+  await wait(
+    window,
+    `document.body.innerText.includes('配置已保存，凭证已存入钥匙串')`,
+  );
+  const platformDb = new DatabaseSync(join(root, "profile", "projects.sqlite"));
+  platformCredentialRef = platformDb
+    .prepare(
+      "SELECT credential_ref FROM connections WHERE project_id=? AND provider='feishu'",
+    )
+    .get(first.id).credential_ref;
+  platformDb.close();
+  assert.equal(
+    await wc.executeJavaScript(
+      `document.querySelector('input[name=appId]').form.querySelector('input[name=secret]').value`,
+    ),
+    "",
+  );
+  assert.equal(
+    await wc.executeJavaScript(
+      `window.produck.platforms.profile(${JSON.stringify(second.id)}, 'feishu')`,
+    ),
+    null,
+  );
+  await wc.executeJavaScript(
+    `document.querySelector('input[name=appId]').form.querySelector('button[type=button]').click()`,
+  );
+  await wait(
+    window,
+    `document.body.innerText.includes('读取成功：平台连接测试迭代')`,
+  );
+  await wc.executeJavaScript(
+    `document.querySelector('input[name=appId]').scrollIntoView({block:'center'});new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`,
+  );
+  writeFileSync(
+    "docs/verification/desktop-platforms.png",
     (await wc.capturePage()).toPNG(),
   );
   assert.equal(await wc.executeJavaScript("typeof require"), "undefined");

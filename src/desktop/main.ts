@@ -1,3 +1,5 @@
+import { PlatformService } from "../integrations/platform-service.js";
+import { registerPlatformIpc } from "./platforms-ipc.js";
 import { registerWorkbenchIpc } from "./workbench-ipc.js";
 import { app, BrowserWindow, ipcMain } from "electron";
 import { fileURLToPath } from "node:url";
@@ -48,6 +50,10 @@ else
     registerProjectIpc(repository, () => window);
     const credentials = new MacKeychain(
       join(here, "../native/produck-keychain"),
+    );
+    registerPlatformIpc(
+      new PlatformService(database, credentials),
+      () => window,
     );
     const modelService = new ModelService(database, credentials);
     const stopModels = registerModelIpc(modelService, () => window);

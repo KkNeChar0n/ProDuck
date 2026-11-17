@@ -1,3 +1,9 @@
+import type {
+  Platform,
+  PlatformInput,
+  PlatformProfile,
+  ConnectionTest,
+} from "./platforms.js";
 import type { ImportedSkill } from "./skills.js";
 import type { AgentRun } from "./agent.js";
 import type { DocumentDraft, PrototypeState } from "./documents.js";
@@ -29,6 +35,11 @@ export interface DesktopInfo {
   platform: string;
 }
 export interface DesktopBridge {
+  platforms: {
+    profile(id: string, provider: Platform): Promise<PlatformProfile | null>;
+    save(id: string, input: PlatformInput): Promise<PlatformProfile>;
+    test(id: string, provider: Platform): Promise<ConnectionTest>;
+  };
   skills: {
     list(id: string): Promise<ImportedSkill[]>;
     import(id: string): Promise<ImportedSkill | null>;
