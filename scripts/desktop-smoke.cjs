@@ -10,6 +10,8 @@ const { join, resolve } = require("node:path");
 const { pathToFileURL } = require("node:url");
 const assert = require("node:assert/strict");
 const { createServer } = require("node:http");
+const applicationRoot = process.env.PRODUCK_TEST_APP_ROOT || resolve(".");
+const applicationFile = (file) => join(applicationRoot, file);
 let server,
   credentialRef,
   platformCredentialRef,
@@ -20,25 +22,30 @@ let server,
   deliveryPublication;
 async function cleanup() {
   if (credentialRef) {
-    const { MacKeychain } = await import("../dist/integrations/credentials.js");
-    await new MacKeychain(resolve("dist/native/produck-keychain")).delete(
-      credentialRef,
-      platformCredentialRef,
+    const { MacKeychain } = await import(
+      pathToFileURL(applicationFile("dist/integrations/credentials.js")).href
     );
+    await new MacKeychain(
+      applicationFile("dist/native/produck-keychain"),
+    ).delete(credentialRef, platformCredentialRef);
     credentialRef = null;
   }
   if (platformCredentialRef) {
-    const { MacKeychain } = await import("../dist/integrations/credentials.js");
-    await new MacKeychain(resolve("dist/native/produck-keychain")).delete(
-      platformCredentialRef,
+    const { MacKeychain } = await import(
+      pathToFileURL(applicationFile("dist/integrations/credentials.js")).href
     );
+    await new MacKeychain(
+      applicationFile("dist/native/produck-keychain"),
+    ).delete(platformCredentialRef);
     platformCredentialRef = null;
   }
   if (yunxiaoCredentialRef) {
-    const { MacKeychain } = await import("../dist/integrations/credentials.js");
-    await new MacKeychain(resolve("dist/native/produck-keychain")).delete(
-      yunxiaoCredentialRef,
+    const { MacKeychain } = await import(
+      pathToFileURL(applicationFile("dist/integrations/credentials.js")).href
     );
+    await new MacKeychain(
+      applicationFile("dist/native/produck-keychain"),
+    ).delete(yunxiaoCredentialRef);
   }
   if (server) server.close();
 }
@@ -121,7 +128,7 @@ const wait = async (w, expression) => {
     );
     return { response: 1, checkboxChecked: false };
   };
-  await import(pathToFileURL(resolve("dist/desktop/main.js")).href);
+  await import(pathToFileURL(applicationFile("dist/desktop/main.js")).href);
   const window = await ready;
   const wc = window.webContents;
   const errors = [];

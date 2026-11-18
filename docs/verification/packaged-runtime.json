@@ -1,0 +1,17 @@
+{
+  "version": "0.1.10",
+  "checkedAt": "2026-11-18T09:40:47.436Z",
+  "filesVerified": 209,
+  "versions": {
+    "electron": "45.3.3",
+    "parse5": "8.0.0",
+    "entities": "6.0.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "scheduler": "0.28.0"
+  },
+  "sourceTreeUsedByApp": false,
+  "cliAvailable": false,
+  "instrumentation": "Temporary copy main entry replaced with test harness; dist and runtime dependencies verified unchanged before and after",
+  "cleanMachineVerified": false
+}

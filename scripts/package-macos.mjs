@@ -1,3 +1,4 @@
+import { runtimeManifest } from "./runtime-manifest.mjs";
 import { spawnSync } from "node:child_process";
 import {
   mkdtempSync,
@@ -65,6 +66,20 @@ try {
       resolve(`node_modules/${name}/LICENSE`),
       join(resources, `${name}-LICENSE`),
     );
+  const versions = Object.fromEntries(
+    ["electron", "parse5", "entities", "react", "react-dom", "scheduler"].map(
+      (name) => [
+        name,
+        JSON.parse(
+          readFileSync(resolve("node_modules", name, "package.json"), "utf8"),
+        ).version,
+      ],
+    ),
+  );
+  writeFileSync(
+    join(appRoot, "runtime-manifest.json"),
+    JSON.stringify(runtimeManifest(appRoot, versions), null, 2),
+  );
   const plist = join(contents, "Info.plist");
   for (const [key, value] of Object.entries({
     CFBundleDisplayName: "Produck",
