@@ -1,3 +1,7 @@
+import type {
+  RemoteDocumentSnapshot,
+  DocumentChangeReview,
+} from "./document-review.js";
 import type { PublicationReview, PublicationRun } from "./publication.js";
 import type {
   Platform,
@@ -36,6 +40,20 @@ export interface DesktopInfo {
   platform: string;
 }
 export interface DesktopBridge {
+  documentReviews: {
+    fetch(id: string, runId: string): Promise<RemoteDocumentSnapshot>;
+    prepare(
+      id: string,
+      snapshotId: string,
+      sectionId: string,
+      after: string,
+    ): Promise<DocumentChangeReview>;
+    approve(
+      id: string,
+      reviewId: string,
+      digest: string,
+    ): Promise<DocumentChangeReview>;
+  };
   publication: {
     runs(id: string): Promise<PublicationRun[]>;
     publish(

@@ -1,3 +1,4 @@
+import { DocumentReviews } from "../workflows/document-review.js";
 import { PublicationWorkflow } from "../workflows/publication.js";
 import { FeishuClient } from "../integrations/feishu.js";
 import { PublicationReviews } from "../workflows/publication-review.js";
@@ -77,6 +78,30 @@ export function registerWorkbenchIpc(
       projects,
       reviews,
       async (id) => new FeishuClient((await platforms.feishuSession(id)).token),
+    );
+    const changes = new DocumentReviews(
+      projects,
+      publisher,
+      platforms,
+      async (id) => new FeishuClient((await platforms.feishuSession(id)).token),
+    );
+    ipcMain.handle("document-reviews:fetch", (e, id: string, runId: string) => {
+      trusted(e, id);
+      return changes.fetch(id, runId);
+    });
+    ipcMain.handle(
+      "document-reviews:prepare",
+      (e, id: string, snapshotId: string, sectionId: string, after: string) => {
+        trusted(e, id);
+        return changes.prepare(id, snapshotId, sectionId, after);
+      },
+    );
+    ipcMain.handle(
+      "document-reviews:approve",
+      (e, id: string, reviewId: string, digest: string) => {
+        trusted(e, id);
+        return changes.approve(id, reviewId, digest);
+      },
     );
     ipcMain.handle("publication:runs", (e, id: string) => {
       trusted(e, id);

@@ -1,3 +1,4 @@
+import { DocumentChanges } from "./DocumentChanges";
 import { useEffect, useState } from "react";
 import type {
   PublicationReview,
@@ -170,6 +171,9 @@ export function PublicationReviewPanel({
             </div>
           )}
         </>
+      )}
+      {run?.state === "published" && (
+        <DocumentChanges key={run.id} projectId={projectId} runId={run.id} />
       )}
       {error && (
         <p role="alert" className="error">

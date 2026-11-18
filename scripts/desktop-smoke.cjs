@@ -598,6 +598,48 @@ const wait = async (w, expression) => {
     "docs/verification/desktop-published.png",
     (await wc.capturePage()).toPNG(),
   );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='读取线上最新文档').click()`,
+  );
+  await wait(
+    window,
+    `document.querySelector('[aria-label="线上文档章节"]') !== null`,
+  );
+  await wc.executeJavaScript(
+    `const select = document.querySelector('[aria-label="线上文档章节"]');select.value = Array.from(select.options).find(o=>o.text==='目标').value;select.dispatchEvent(new Event('change',{bubbles:true}))`,
+  );
+  await wait(
+    window,
+    `document.querySelector('[aria-label="章节修改内容"]') !== null`,
+  );
+  await wc.executeJavaScript(
+    `Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(document.querySelector('[aria-label="章节修改内容"]'),${JSON.stringify("## 目标\n支持筛选、新增客户和状态重置。")});document.querySelector('[aria-label="章节修改内容"]').dispatchEvent(new Event('input',{bubbles:true}))`,
+  );
+  await wait(
+    window,
+    `!Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='生成章节差异').disabled`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='生成章节差异').click()`,
+  );
+  await wait(
+    window,
+    `Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='重新核对线上并批准差异')`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='重新核对线上并批准差异').click()`,
+  );
+  await wait(
+    window,
+    `document.body.innerText.includes('差异已批准，尚未合并')`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('h4')).find(h=>h.textContent.startsWith('差异：')).scrollIntoView({block:'center'});new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`,
+  );
+  writeFileSync(
+    "docs/verification/desktop-document-diff.png",
+    (await wc.capturePage()).toPNG(),
+  );
   assert.equal(await wc.executeJavaScript("typeof require"), "undefined");
   assert.equal(errors.length, 0, errors.join("\n"));
   console.log(
