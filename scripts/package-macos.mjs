@@ -80,7 +80,7 @@ try {
   symlinkSync("/Applications", join(payload, "Applications"));
   writeFileSync(
     join(payload, "使用说明.txt"),
-    `Produck ${pkg.version} 开发测试包（arm64，macOS 13+）\n拖入 Applications 后打开。只作本机开发测试，未完成 Developer ID 签名、公证或干净机器验收。\n已实现项目、模型、页面采集、候选原型和本地 PRD 草稿；已加入受控 Agent 任务和说明型 Skill 导入。飞书首次发布已实现（真实租户待联调），差异合并、云效同步及脚本型 Skill 尚未完成，真实模型重建质量暂未验收。\n`,
+    `Produck ${pkg.version} 开发测试包（arm64，macOS 13+）\n拖入 Applications 后打开。只作本机开发测试，未完成 Developer ID 签名、公证或干净机器验收。\n已实现项目、模型、页面采集、候选原型和本地 PRD 草稿；已加入受控 Agent 任务和说明型 Skill 导入。飞书首次发布已实现（真实租户待联调），云效同步已实现（真实租户待联调），原文差异合并暂缓，脚本型 Skill 尚未完成，真实模型重建质量暂未验收。\n`,
   );
   mkdirSync("release", { recursive: true });
   run("/usr/bin/hdiutil", [

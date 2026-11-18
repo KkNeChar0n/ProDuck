@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
@@ -67,11 +67,15 @@ function fixture() {
     loseCreate = false,
     loseUpload = false,
     corruptRead = false,
-    refuseWrite = false;
+    refuseWrite = false,
+    loseAppend = false,
+    loseBind = false,
+    failReadback = false,
+    hideChildren = false;
   const client: FeishuPort = {
     node: async (token) =>
       structuredClone(nodes.find((n) => n.node_token === token)!),
-    children: async () => structuredClone(nodes.slice(1)),
+    children: async () => (hideChildren ? [] : structuredClone(nodes.slice(1))),
     createNode: async (space, parentToken, title) => {
       writes++;
       creates++;
@@ -105,6 +109,10 @@ function fixture() {
         block_id: `block${++seq}`,
       }));
       blocks.get(doc)!.push(...result);
+      if (loseAppend && doc !== "parentdoc") {
+        loseAppend = false;
+        throw new Error("正文响应丢失");
+      }
       return structuredClone(result);
     },
     upload: async (_block, _name, bytes) => {
@@ -122,8 +130,15 @@ function fixture() {
       writes++;
       const value = blocks.get(doc)!.find((b) => b.block_id === block)!;
       value[image ? "image" : "file"] = { token };
+      if (loseBind) {
+        loseBind = false;
+        throw new Error("绑定响应丢失");
+      }
     },
-    download: async (token) => media.get(token)!,
+    download: async (token) => {
+      if (failReadback) throw new Error("读回断网");
+      return media.get(token)!;
+    },
   };
   const reviews = {
     verify: (_id: string, reviewId: string) => {
@@ -140,6 +155,19 @@ function fixture() {
     workflow,
     blocks,
     media,
+    client,
+    interruptAppend: () => {
+      loseAppend = true;
+    },
+    interruptBind: () => {
+      loseBind = true;
+    },
+    failReadback: (value: boolean) => {
+      failReadback = value;
+    },
+    hideChildren: (value: boolean) => {
+      hideChildren = value;
+    },
     counts: () => ({ creates, writes, uploads }),
     loseCreate: () => {
       loseCreate = true;
@@ -286,4 +314,93 @@ test("Feishu adapter uses official block/media contracts, bounded redirects and 
     failed.blocks("doc1"),
     (e) => e instanceof Error && !e.message.includes("private"),
   );
+});
+
+test("body append response loss reconciles exact existing blocks without duplication", async () => {
+  const f = fixture();
+  f.interruptAppend();
+  const first = await f
+    .workflow()
+    .publish(f.p.id, "review1", "digest", "客户管理");
+  assert.equal(first.state, "needs-check");
+  const bodyCount = [...f.blocks.values()]
+    .flat()
+    .filter((b) =>
+      b.text?.elements?.some(
+        (e: any) => e.text_run?.content === "# 客户管理\n需求正文",
+      ),
+    ).length;
+  assert.equal(bodyCount, 1);
+  const next = await f
+    .workflow()
+    .publish(f.p.id, "review1", "digest", "客户管理");
+  assert.equal(next.state, "published", next.message);
+  assert.equal(f.counts().creates, 1);
+  assert.equal(
+    [...f.blocks.values()]
+      .flat()
+      .filter((b) =>
+        b.text?.elements?.some(
+          (e: any) => e.text_run?.content === "# 客户管理\n需求正文",
+        ),
+      ).length,
+    1,
+  );
+  f.db.close();
+});
+test("attachment binding response loss recovers from remote token and never uploads twice", async () => {
+  const f = fixture();
+  f.interruptBind();
+  assert.equal(
+    (await f.workflow().publish(f.p.id, "review1", "digest", "客户管理")).state,
+    "needs-check",
+  );
+  assert.equal(f.counts().uploads, 1);
+  const next = await f
+    .workflow()
+    .publish(f.p.id, "review1", "digest", "客户管理");
+  assert.equal(next.state, "published", next.message);
+  assert.equal(f.counts().uploads, 2); // one prototype and one screenshot
+  assert.equal(f.counts().creates, 1);
+  f.db.close();
+});
+test("unresolved create timeout never resends; later visibility allows reconciliation", async () => {
+  const f = fixture();
+  f.loseCreate();
+  await f.workflow().publish(f.p.id, "review1", "digest", "客户管理");
+  f.hideChildren(true);
+  const before = f.counts();
+  assert.equal(
+    (await f.workflow().publish(f.p.id, "review1", "digest", "客户管理")).state,
+    "needs-check",
+  );
+  assert.deepEqual(f.counts(), before);
+  f.hideChildren(false);
+  assert.equal(
+    (await f.workflow().publish(f.p.id, "review1", "digest", "客户管理")).state,
+    "published",
+  );
+  assert.equal(f.counts().creates, 1);
+  f.db.close();
+});
+test("readback failure preserves receipts and restart only continues missing stages", async () => {
+  const f = fixture();
+  f.failReadback(true);
+  assert.equal(
+    (await f.workflow().publish(f.p.id, "review1", "digest", "客户管理")).state,
+    "partial",
+  );
+  const path = join(f.p.workspace, "workflows/publications.json"),
+    records = JSON.parse(readFileSync(path, "utf8"));
+  records[0].state = "running";
+  writeFileSync(path, JSON.stringify(records));
+  assert.equal(f.workflow().list(f.p.id)[0].state, "needs-check");
+  f.failReadback(false);
+  assert.equal(
+    (await f.workflow().publish(f.p.id, "review1", "digest", "客户管理")).state,
+    "published",
+  );
+  assert.equal(f.counts().uploads, 2);
+  assert.equal(f.counts().creates, 1);
+  f.db.close();
 });

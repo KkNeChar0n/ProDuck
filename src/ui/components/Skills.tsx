@@ -1,12 +1,15 @@
+import { builtinWorkflows } from "../../skills/builtin";
 import { useEffect, useState } from "react";
 import type { ImportedSkill } from "../../contracts/skills";
 import { desktop, errorText } from "../bridge";
 export function Skills({
   projectId,
   onTasks,
+  onWorkflow,
 }: {
   projectId: string;
   onTasks: () => void;
+  onWorkflow: (entry: "workbench" | "documents") => void;
 }) {
   const [skills, setSkills] = useState<ImportedSkill[]>([]),
     [error, setError] = useState("");
@@ -18,7 +21,33 @@ export function Skills({
   }, [projectId]);
   return (
     <article className="paper">
-      <h2>项目 Skills</h2>
+      <h2>内置工作流</h2>
+      <p>
+        随 Produck 安装即可使用，无需另装 Node、Python 或 Agent
+        CLI。模型与平台连接沿用当前项目设置。
+      </p>
+      {builtinWorkflows.map((workflow) => (
+        <section className="notice" key={workflow.id}>
+          <h3>{workflow.name}</h3>
+          <p>{workflow.description}</p>
+          <p className="muted">Produck 内置 · v{workflow.version}</p>
+          {workflow.limitation && <p>{workflow.limitation}</p>}
+          <details>
+            <summary>步骤与使用条件</summary>
+            <ol>
+              {workflow.steps.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+            <p>{workflow.requirements}</p>
+            <p>{workflow.permissions}</p>
+          </details>
+          <button onClick={() => onWorkflow(workflow.entry)}>
+            {workflow.action}
+          </button>
+        </section>
+      ))}
+      <h2>导入的 Skills</h2>
       <p>
         导入包含 SKILL.md 的文件夹。纯说明技能可供 Agent
         使用；脚本、外部命令和未适配工具会列出具体限制。

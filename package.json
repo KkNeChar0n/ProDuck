@@ -1,6 +1,6 @@
 {
   "name": "produck",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "private": true,
   "description": "A local-first product manager agent for macOS",
   "type": "module",
@@ -15,6 +15,7 @@
     "format": "prettier --write src scripts prototypes tests/*.ts *.json vite.config.ts",
     "format:check": "prettier --check src scripts prototypes tests/*.ts *.json vite.config.ts",
     "test:desktop": "node scripts/run-electron.mjs scripts/desktop-smoke.cjs",
+    "test:desktop:no-cli": "node scripts/run-electron.mjs scripts/desktop-smoke.cjs --without-cli",
     "build:native": "node scripts/build-native.mjs",
     "test:workbench": "node scripts/run-electron.mjs scripts/workbench-smoke.cjs",
     "package:mac": "npm run build && node scripts/package-macos.mjs"

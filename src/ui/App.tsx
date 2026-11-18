@@ -196,6 +196,7 @@ export function App() {
               key={project.id}
               projectId={project.id}
               onTasks={() => setView("workflow")}
+              onWorkflow={setView}
             />
           ) : view === "workflow" ? (
             <TaskHistory key={project.id} projectId={project.id} />

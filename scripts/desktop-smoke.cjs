@@ -41,6 +41,17 @@ async function cleanup() {
 }
 const root = mkdtempSync(join(tmpdir(), "produck-desktop-test-"));
 app.setPath("userData", join(root, "profile"));
+if (process.argv.includes("--without-cli")) {
+  const emptyPath = join(root, "no-cli");
+  mkdirSync(emptyPath);
+  process.env.PATH = emptyPath;
+  const { spawnSync } = require("node:child_process");
+  for (const command of ["node", "python", "python3", "codex", "claude"]) {
+    assert.equal(spawnSync(command, ["--version"]).error?.code, "ENOENT");
+  }
+  console.log("CLI isolation: Node/Python/Codex/Claude unavailable on PATH");
+}
+
 mkdirSync(join(root, "skill"));
 writeFileSync(
   join(root, "skill/SKILL.md"),
@@ -463,6 +474,36 @@ const wait = async (w, expression) => {
   await wait(
     window,
     `Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='导入 Skill 文件夹')`,
+  );
+  for (const [action, expected] of [
+    ["开始制作原型", "页面体验与原型"],
+    ["进入 PRD 工作流", "文档"],
+    ["进入文档差异评审", "文档"],
+  ]) {
+    assert(
+      await wc.executeJavaScript(
+        `document.body.innerText.includes('原文合并与共用附件更新暂缓')`,
+      ),
+    );
+    await wc.executeJavaScript(
+      `Array.from(document.querySelectorAll('button')).find(b=>b.textContent===${JSON.stringify(action)}).click()`,
+    );
+    await wait(window, `!document.body.innerText.includes('内置工作流')`);
+    if (expected === "文档")
+      await wait(window, `document.body.innerText.includes('发布材料审阅')`);
+    else
+      await wait(
+        window,
+        `document.querySelector('[aria-label="页面地址"]') !== null`,
+      );
+    await wc.executeJavaScript(
+      `Array.from(document.querySelectorAll('nav button')).find(b=>b.textContent.includes('Skills')).click()`,
+    );
+    await wait(window, `document.body.innerText.includes('内置工作流')`);
+  }
+  writeFileSync(
+    "docs/verification/desktop-builtin-skills.png",
+    (await wc.capturePage()).toPNG(),
   );
   await wc.executeJavaScript(
     `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='导入 Skill 文件夹').click()`,
