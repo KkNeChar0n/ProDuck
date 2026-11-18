@@ -613,7 +613,7 @@ const wait = async (w, expression) => {
     `document.querySelector('[aria-label="章节修改内容"]') !== null`,
   );
   await wc.executeJavaScript(
-    `Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(document.querySelector('[aria-label="章节修改内容"]'),${JSON.stringify("## 目标\n支持筛选、新增客户和状态重置。")});document.querySelector('[aria-label="章节修改内容"]').dispatchEvent(new Event('input',{bubbles:true}))`,
+    `Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(document.querySelector('[aria-label="章节修改内容"]'),${JSON.stringify("## 目标\n支持筛选、新增客户和状态重置。\n\n")});document.querySelector('[aria-label="章节修改内容"]').dispatchEvent(new Event('input',{bubbles:true}))`,
   );
   await wait(
     window,
@@ -639,6 +639,13 @@ const wait = async (w, expression) => {
   writeFileSync(
     "docs/verification/desktop-document-diff.png",
     (await wc.capturePage()).toPNG(),
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='检查合并条件').click()`,
+  );
+  await wait(
+    window,
+    `document.body.innerText.includes('预检通过：涉及 1 个文字块')`,
   );
   assert.equal(await wc.executeJavaScript("typeof require"), "undefined");
   assert.equal(errors.length, 0, errors.join("\n"));

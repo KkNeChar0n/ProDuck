@@ -31,3 +31,14 @@ export interface DocumentChangeReview {
   diff: { kind: "same" | "removed" | "added"; text: string }[];
   approvedAt?: string;
 }
+
+export interface DocumentMergePlan {
+  id: string;
+  reviewId: string;
+  digest: string;
+  documentId: string;
+  checkedAt: string;
+  revision: number;
+  edits: { blockId: string; before: string; after: string }[];
+  writeEnabled: false;
+}

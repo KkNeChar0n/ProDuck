@@ -1,6 +1,7 @@
 import type {
   RemoteDocumentSnapshot,
   DocumentChangeReview,
+  DocumentMergePlan,
 } from "./document-review.js";
 import type { PublicationReview, PublicationRun } from "./publication.js";
 import type {
@@ -41,6 +42,11 @@ export interface DesktopInfo {
 }
 export interface DesktopBridge {
   documentReviews: {
+    preflight(
+      id: string,
+      reviewId: string,
+      digest: string,
+    ): Promise<DocumentMergePlan>;
     fetch(id: string, runId: string): Promise<RemoteDocumentSnapshot>;
     prepare(
       id: string,

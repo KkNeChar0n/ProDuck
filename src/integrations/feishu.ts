@@ -33,6 +33,7 @@ export const blockText = (block: FeishuBlock) =>
     .map((e: any) => e.text_run?.content ?? "")
     .join("");
 export interface FeishuPort {
+  revision?(document: string): Promise<number>;
   download(token: string): Promise<Uint8Array>;
   node(token: string): Promise<WikiNode>;
   children(space: string, parent: string): Promise<WikiNode[]>;
@@ -99,6 +100,13 @@ export class FeishuClient implements FeishuPort {
           : "飞书写入未确认，请先核对远端结果，勿重复创建",
       );
     }
+  }
+  async revision(document: string): Promise<number> {
+    const data = await this.request(`docx/v1/documents/${segment(document)}`);
+    const revision = data.document?.revision_id;
+    if (!Number.isSafeInteger(revision) || revision < 1)
+      throw new Error("无法读取有效文档版本，停止预检");
+    return revision;
   }
   async download(token: string): Promise<Uint8Array> {
     try {

@@ -38,6 +38,7 @@ function fixture() {
       title: "需求",
       obj_type: "docx",
     }),
+    revision: async () => 10,
     blocks: async () => {
       reads++;
       return structuredClone(blocks);
@@ -69,7 +70,7 @@ function fixture() {
       },
       async () => client,
     );
-  return { db, p, b, blocks, service, reads: () => reads };
+  return { db, p, b, blocks, client, service, reads: () => reads };
 }
 test("sections locate Markdown headings inside one block while protecting non-text and metadata", () => {
   const f = fixture(),
@@ -159,4 +160,76 @@ test("line diff handles insertions, deletions and empty replacements without los
     { kind: "removed", text: "a" },
     { kind: "added", text: "" },
   ]);
+});
+
+test("merge preflight requires independent approval and preserves exact adjacent section bytes without any write", async () => {
+  const f = fixture(),
+    service = f.service(),
+    snapshot = await service.fetch(f.p.id, "run"),
+    target = snapshot.sections.find((s) => s.title === "目标")!;
+  const review = service.prepare(
+    f.p.id,
+    snapshot.id,
+    target.id,
+    "# 目标\n新目标\n",
+  );
+  await assert.rejects(
+    service.preflight(f.p.id, review.id, review.digest),
+    /先批准/,
+  );
+  await service.approve(f.p.id, review.id, review.digest);
+  const original = structuredClone(f.blocks),
+    plan = await service.preflight(f.p.id, review.id, review.digest);
+  assert.equal(plan.writeEnabled, false);
+  assert.equal(plan.revision, 10);
+  assert.equal(plan.edits.length, 1);
+  assert.equal(plan.edits[0].after, "# 目标\n新目标\n## 验收\n可筛选");
+  assert.deepEqual(f.blocks, original);
+  f.blocks[1].text.elements[0].text_run.content =
+    "# 目标\n人工修改\n## 验收\n可筛选";
+  await assert.rejects(
+    service.preflight(f.p.id, review.id, review.digest),
+    /批准失效/,
+  );
+  assert.equal(service.reviews(f.p.id)[0].state, "conflict");
+  f.db.close();
+});
+test("preflight rejects section boundary concatenation instead of silently modifying approved content", async () => {
+  const f = fixture(),
+    service = f.service(),
+    snapshot = await service.fetch(f.p.id, "run"),
+    target = snapshot.sections.find((s) => s.title === "目标")!;
+  const review = service.prepare(
+    f.p.id,
+    snapshot.id,
+    target.id,
+    "# 目标\n缺少末尾换行",
+  );
+  await service.approve(f.p.id, review.id, review.digest);
+  await assert.rejects(
+    service.preflight(f.p.id, review.id, review.digest),
+    /保留换行/,
+  );
+  f.db.close();
+});
+
+test("preflight detects a document revision change during the read window", async () => {
+  const f = fixture(),
+    service = f.service(),
+    snapshot = await service.fetch(f.p.id, "run"),
+    target = snapshot.sections.find((s) => s.title === "验收")!;
+  const review = service.prepare(
+    f.p.id,
+    snapshot.id,
+    target.id,
+    "## 验收\n新标准",
+  );
+  await service.approve(f.p.id, review.id, review.digest);
+  let revision = 10;
+  f.client.revision = async () => revision++;
+  await assert.rejects(
+    service.preflight(f.p.id, review.id, review.digest),
+    /预检期间文档发生变化/,
+  );
+  f.db.close();
 });

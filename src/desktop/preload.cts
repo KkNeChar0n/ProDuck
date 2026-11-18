@@ -3,6 +3,8 @@ contextBridge.exposeInMainWorld(
   "produck",
   Object.freeze({
     documentReviews: {
+      preflight: (id: string, reviewId: string, digest: string) =>
+        ipcRenderer.invoke("document-reviews:preflight", id, reviewId, digest),
       fetch: (id: string, runId: string) =>
         ipcRenderer.invoke("document-reviews:fetch", id, runId),
       prepare: (

@@ -55,6 +55,11 @@ module.exports = function fixture() {
         blocks.set(node.obj_token, []);
         return json({ node });
       }
+      const document = path.match(/\/docx\/v1\/documents\/([^/]+)$/);
+      if (document && method === "GET")
+        return json({
+          document: { document_id: document[1], revision_id: 10 },
+        });
       const children = path.match(
         /\/documents\/([^/]+)\/blocks\/[^/]+\/children$/,
       );

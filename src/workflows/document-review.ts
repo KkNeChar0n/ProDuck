@@ -8,6 +8,7 @@ import type {
   RemoteDocumentSnapshot,
   RemoteSection,
   DocumentChangeReview,
+  DocumentMergePlan,
 } from "../contracts/document-review.js";
 import { atomicWrite, projectPath } from "../projects/storage.js";
 const hash = (value: unknown) =>
@@ -196,7 +197,7 @@ export class DocumentReviews {
       throw new Error("读取期间项目连接变化，请重试");
     if (JSON.stringify(blocks).length > 2_000_000)
       throw new Error("文档超过当前评审范围，请缩小内容");
-    return { run, node, blocks };
+    return { run, node, blocks, client };
   }
   async fetch(id: string, runId: string): Promise<RemoteDocumentSnapshot> {
     const { run, node, blocks } = await this.remote(id, runId);
@@ -269,6 +270,79 @@ export class DocumentReviews {
     };
     this.save(id, review);
     return review;
+  }
+  async preflight(
+    id: string,
+    reviewId: string,
+    digest: string,
+  ): Promise<DocumentMergePlan> {
+    const review = this.reviews(id).find((r) => r.id === reviewId);
+    if (
+      !review ||
+      review.state !== "approved" ||
+      !review.approvedAt ||
+      review.digest !== digest ||
+      hash([
+        review.snapshotId,
+        review.sectionId,
+        review.fingerprint,
+        review.before,
+        review.after,
+      ]) !== digest
+    )
+      throw new Error("请先批准当前差异，不能用原型批准代替文档批准");
+    const snapshot = this.checkedSnapshot(id, review.snapshotId);
+    const { node, client } = await this.remote(id, snapshot.runId);
+    if (!client.revision) throw new Error("当前连接不支持版本预检");
+    const revision = await client.revision(node.obj_token);
+    const blocks = await client.blocks(node.obj_token);
+    if ((await client.revision(node.obj_token)) !== revision)
+      throw new Error("预检期间文档发生变化，请重试；未执行写入");
+    const current = sections(blocks).find(
+      (section) => section.id === review.sectionId,
+    );
+    if (
+      node.obj_token !== snapshot.documentId ||
+      !current?.editable ||
+      current.fingerprint !== review.fingerprint ||
+      current.text !== review.before
+    ) {
+      this.save(id, { ...review, state: "conflict", approvedAt: undefined });
+      throw new Error("目标章节已变化，批准失效，请重新读取和评审");
+    }
+    const edits = current.spans.map((span, index) => {
+      const block = blocks.find((b) => b.block_id === span.blockId)!;
+      const before = text(block),
+        replacement = index === 0 ? review.after : "";
+      const suffix = before.slice(span.end);
+      if (replacement && suffix.startsWith("#") && !replacement.endsWith("\n"))
+        throw new Error(
+          "修改内容末尾需保留换行，避免与下一章节标题粘连；请重新编辑并评审",
+        );
+      return {
+        blockId: span.blockId,
+        before,
+        after: before.slice(0, span.start) + replacement + suffix,
+      };
+    });
+    if (new Set(edits.map((edit) => edit.blockId)).size !== edits.length)
+      throw new Error("同一块内存在多个修改范围，请缩小评审范围");
+    if (edits.some((edit) => edit.after.length > 100000))
+      throw new Error("修改后单个文本块超过飞书长度限制");
+    if (this.reviews(id).find((r) => r.id === reviewId)?.state !== "approved")
+      throw new Error("差异批准已失效");
+    const plan: DocumentMergePlan = {
+      id: randomUUID(),
+      reviewId,
+      digest,
+      documentId: node.obj_token,
+      checkedAt: new Date().toISOString(),
+      revision,
+      edits,
+      writeEnabled: false,
+    };
+    this.write(id, `documents/merge-plan-${plan.id}.json`, plan);
+    return plan;
   }
   async approve(
     id: string,

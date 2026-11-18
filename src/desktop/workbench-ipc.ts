@@ -85,6 +85,13 @@ export function registerWorkbenchIpc(
       platforms,
       async (id) => new FeishuClient((await platforms.feishuSession(id)).token),
     );
+    ipcMain.handle(
+      "document-reviews:preflight",
+      (e, id: string, reviewId: string, digest: string) => {
+        trusted(e, id);
+        return changes.preflight(id, reviewId, digest);
+      },
+    );
     ipcMain.handle("document-reviews:fetch", (e, id: string, runId: string) => {
       trusted(e, id);
       return changes.fetch(id, runId);

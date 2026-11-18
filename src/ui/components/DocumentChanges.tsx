@@ -2,6 +2,7 @@ import { useState } from "react";
 import type {
   RemoteDocumentSnapshot,
   DocumentChangeReview,
+  DocumentMergePlan,
 } from "../../contracts/document-review";
 import { desktop, errorText } from "../bridge";
 export function DocumentChanges({
@@ -15,6 +16,7 @@ export function DocumentChanges({
     [selected, setSelected] = useState(""),
     [after, setAfter] = useState(""),
     [review, setReview] = useState<DocumentChangeReview | null>(null),
+    [plan, setPlan] = useState<DocumentMergePlan | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const section = snapshot?.sections.find((s) => s.id === selected);
@@ -46,6 +48,7 @@ export function DocumentChanges({
             setSnapshot(value);
             setSelected("");
             setReview(null);
+            setPlan(null);
             setAfter("");
           })
         }
@@ -71,6 +74,7 @@ export function DocumentChanges({
                     ?.text ?? "",
                 );
                 setReview(null);
+                setPlan(null);
               }}
             >
               <option value="">请选择</option>
@@ -101,6 +105,7 @@ export function DocumentChanges({
                       onChange={(e) => {
                         setAfter(e.target.value);
                         setReview(null);
+                        setPlan(null);
                       }}
                     />
                   </label>
@@ -169,6 +174,41 @@ export function DocumentChanges({
           >
             重新核对线上并批准差异
           </button>
+          {review.state === "approved" && (
+            <button
+              disabled={busy}
+              onClick={() =>
+                void action(async () => {
+                  setPlan(null);
+                  try {
+                    setPlan(
+                      await desktop().documentReviews.preflight(
+                        projectId,
+                        review.id,
+                        review.digest,
+                      ),
+                    );
+                  } catch (e) {
+                    if (errorText(e).includes("批准失效"))
+                      setReview({
+                        ...review,
+                        state: "conflict",
+                        approvedAt: undefined,
+                      });
+                    throw e;
+                  }
+                })
+              }
+            >
+              检查合并条件
+            </button>
+          )}
+          {plan && (
+            <p role="status">
+              预检通过：涉及 {plan.edits.length} 个文字块，读取版本{" "}
+              {plan.revision}。原文写入尚未开放；此结果不代表锁定远端版本。
+            </p>
+          )}
           <p role="status">
             {review.state === "approved"
               ? "差异已批准，尚未合并；实际合并前仍需再次核对。"
