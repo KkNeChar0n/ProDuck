@@ -150,6 +150,10 @@ export class ToolRegistry {
         return browser.action(c.projectId, a.action, a.selector, a.value);
       },
     );
+    this.register(additional);
+  }
+  /** Host-only registration; never exposed through IPC or model tools. */
+  register(additional: AgentTool[]) {
     for (const tool of additional) {
       if (this.tools.has(tool.description.name))
         throw new Error("工具名称重复");
@@ -180,7 +184,9 @@ export class ToolRegistry {
     for (const key of tool.description.required)
       if (
         typeof call.args[key] !== "string" ||
-        ((call.args[key] as string).length === 0 && key !== "query")
+        ((call.args[key] as string).length === 0 &&
+          key !== "query" &&
+          !(call.tool === "prepare_prd_change" && key === "after"))
       )
         throw new Error(`缺少参数：${key}`);
     return tool.description;

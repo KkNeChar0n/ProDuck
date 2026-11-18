@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld(
         ipcRenderer.invoke("yunxiao-sync:execute", id, syncId, digest),
     },
     documentReviews: {
+      saved: (id: string, runId: string) =>
+        ipcRenderer.invoke("document-reviews:saved", id, runId),
       preflight: (id: string, reviewId: string, digest: string) =>
         ipcRenderer.invoke("document-reviews:preflight", id, reviewId, digest),
       fetch: (id: string, runId: string) =>

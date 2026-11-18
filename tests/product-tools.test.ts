@@ -182,7 +182,7 @@ test("builtin skills are versioned and selectable without creating imported snap
     skills = new SkillRepository(f.projects);
   assert.equal(skills.list(f.p.id).length, 0);
   const items = skills.available(f.p.id);
-  assert.equal(items.length, 2);
+  assert.equal(items.length, 3);
   const first = skills.instructions(f.p.id, "builtin:prd");
   assert.equal(
     first.fingerprint,

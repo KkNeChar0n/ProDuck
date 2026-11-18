@@ -56,6 +56,13 @@ export interface DesktopBridge {
     ): Promise<YunxiaoSync | null>;
   };
   documentReviews: {
+    saved(
+      id: string,
+      runId: string,
+    ): Promise<{
+      snapshot: RemoteDocumentSnapshot | null;
+      review: DocumentChangeReview | null;
+    }>;
     preflight(
       id: string,
       reviewId: string,

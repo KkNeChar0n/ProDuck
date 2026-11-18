@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type {
   RemoteDocumentSnapshot,
   DocumentChangeReview,
@@ -19,6 +19,29 @@ export function DocumentChanges({
     [plan, setPlan] = useState<DocumentMergePlan | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  useEffect(() => {
+    let active = true;
+    setBusy(true);
+    desktop()
+      .documentReviews.saved(projectId, runId)
+      .then((saved) => {
+        if (!active) return;
+        setSnapshot(saved.snapshot);
+        setReview(saved.review);
+        setSelected(saved.review?.sectionId ?? "");
+        setAfter(saved.review?.after ?? "");
+        setPlan(null);
+      })
+      .catch((e) => {
+        if (active) setError(errorText(e));
+      })
+      .finally(() => {
+        if (active) setBusy(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [projectId, runId]);
   const section = snapshot?.sections.find((s) => s.id === selected);
   async function action(fn: () => Promise<void>) {
     setBusy(true);

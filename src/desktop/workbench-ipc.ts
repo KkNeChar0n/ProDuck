@@ -1,3 +1,4 @@
+import { deliveryTools } from "../agent/delivery-tools.js";
 import { productTools } from "../agent/product-tools.js";
 import { YunxiaoClient } from "../integrations/yunxiao.js";
 import { YunxiaoSyncWorkflow } from "../workflows/yunxiao-sync.js";
@@ -136,6 +137,21 @@ export function registerWorkbenchIpc(
       platforms,
       async (id) => new FeishuClient((await platforms.feishuSession(id)).token),
     );
+    tools.register(deliveryTools(reviews, publisher, changes, sync));
+    ipcMain.handle("document-reviews:saved", (e, id: string, runId: string) => {
+      trusted(e, id);
+      const snapshots = changes.snapshots(id).filter((s) => s.runId === runId);
+      const review = changes
+        .reviews(id)
+        .find((r) => snapshots.some((s) => s.id === r.snapshotId));
+      return {
+        snapshot:
+          snapshots.find((s) => s.id === review?.snapshotId) ??
+          snapshots[0] ??
+          null,
+        review: review ?? null,
+      };
+    });
     ipcMain.handle(
       "document-reviews:preflight",
       (e, id: string, reviewId: string, digest: string) => {

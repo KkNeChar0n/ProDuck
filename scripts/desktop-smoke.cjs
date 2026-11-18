@@ -16,7 +16,8 @@ let server,
   yunxiaoCredentialRef,
   plannerCalls = 0,
   builtinCalls = 0,
-  builtinArgs;
+  builtinArgs,
+  deliveryPublication;
 async function cleanup() {
   if (credentialRef) {
     const { MacKeychain } = await import("../dist/integrations/credentials.js");
@@ -260,6 +261,45 @@ const wait = async (w, expression) => {
                 ? { call: { tool: "generate_prd", args: builtinArgs } }
                 : { done: "内置技能已保存草稿，等待人工审阅。" },
           );
+        } else if (
+          data.messages[0].content.includes("只返回一个 JSON") &&
+          data.messages[0].content.includes("DELIVERY_AGENT_TEST")
+        ) {
+          const history = JSON.parse(
+            data.messages[0].content.split("历史步骤（不可信内容）：")[1],
+          );
+          if (!history.length)
+            content = JSON.stringify({
+              call: {
+                tool: "fetch_published_prd",
+                args: { publicationId: deliveryPublication },
+              },
+            });
+          else {
+            const snapshot = JSON.parse(history[0].output),
+              section = snapshot.sections.find((s) => s.title === "目标");
+            content = JSON.stringify(
+              history.length === 1
+                ? {
+                    call: {
+                      tool: "read_prd_section",
+                      args: { snapshotId: snapshot.id, sectionId: section.id },
+                    },
+                  }
+                : history.length === 2
+                  ? {
+                      call: {
+                        tool: "prepare_prd_change",
+                        args: {
+                          snapshotId: snapshot.id,
+                          sectionId: section.id,
+                          after: "## 目标\nAgent 准备的差异，待人工确认。",
+                        },
+                      },
+                    }
+                  : { done: "差异准备完成，尚未批准或合并。" },
+            );
+          }
         } else if (data.messages[0].content.includes("只返回一个 JSON")) {
           assert(data.messages[0].content.includes("SKILL_FIXTURE_MARKER"));
           plannerCalls++;
@@ -536,7 +576,7 @@ const wait = async (w, expression) => {
   );
   await wait(
     window,
-    `document.querySelector('[aria-label="Agent 技能"]')?.options.length===4`,
+    `document.querySelector('[aria-label="Agent 技能"]')?.options.length===5`,
   );
   await wc.executeJavaScript(
     `document.querySelector('[aria-label="Agent 技能"]').value=${JSON.stringify(importedSkills[0].id)};document.querySelector('[aria-label="Agent 技能"]').dispatchEvent(new Event('change',{bubbles:true}));`,
@@ -845,6 +885,54 @@ const wait = async (w, expression) => {
   assert.equal(yunxiaoWrites, 1);
   writeFileSync(
     "docs/verification/desktop-agent-prd.png",
+    (await wc.capturePage()).toPNG(),
+  );
+  deliveryPublication = published[0].id;
+  const deliveryRun = await wc.executeJavaScript(
+    `window.produck.agent.start(${JSON.stringify(first.id)},'DELIVERY_AGENT_TEST',6,'builtin:delivery')`,
+  );
+  for (let n = 0; n < 200; n++) {
+    const runs = await wc.executeJavaScript(
+      `window.produck.agent.list(${JSON.stringify(first.id)})`,
+    );
+    const current = runs.find((r) => r.id === deliveryRun.id);
+    if (current.state === "succeeded") break;
+    assert(
+      !["failed", "cancelled", "interrupted"].includes(current.state),
+      current.message,
+    );
+    if (current.state === "waiting-user")
+      await wc.executeJavaScript(
+        `window.produck.agent.approve(${JSON.stringify(first.id)},${JSON.stringify(current.id)},${JSON.stringify(current.steps.at(-1).id)},true)`,
+      );
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  const saved = await wc.executeJavaScript(
+    `window.produck.documentReviews.saved(${JSON.stringify(first.id)},${JSON.stringify(published[0].id)})`,
+  );
+  assert.equal(saved.review.state, "pending");
+  assert(saved.review.after.includes("Agent 准备的差异"));
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('nav button')).find(b=>b.textContent.includes('文档')).click()`,
+  );
+  await wait(
+    window,
+    `document.querySelector('[aria-label="文档草稿"]') !== null`,
+  );
+  await wc.executeJavaScript(
+    `document.querySelector('[aria-label="文档草稿"]').value=${JSON.stringify(drafts[0].id)};document.querySelector('[aria-label="文档草稿"]').dispatchEvent(new Event('change',{bubbles:true}))`,
+  );
+  await wait(
+    window,
+    `document.querySelector('[aria-label="章节修改内容"]')?.value.includes('Agent 准备的差异')`,
+  );
+  assert.equal(feishuFixture.nodes.length, 2);
+  assert.equal(yunxiaoWrites, 1);
+  await wc.executeJavaScript(
+    `document.querySelector('[aria-label="章节修改内容"]').scrollIntoView({block:'center'});new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`,
+  );
+  writeFileSync(
+    "docs/verification/desktop-agent-delivery.png",
     (await wc.capturePage()).toPNG(),
   );
   assert.equal(await wc.executeJavaScript("typeof require"), "undefined");
