@@ -158,6 +158,19 @@ export class PlatformService {
       throw new Error("平台返回无效数据，未确认连接成功");
     }
   }
+  async yunxiaoSession(id: string) {
+    const row = this.row(id, "yunxiao");
+    if (!row?.credential_ref) throw new Error("请先保存云效连接");
+    const config = validate({
+      ...JSON.parse(String(row.config_json)),
+      provider: "yunxiao",
+    });
+    const token = await this.credentials.get(String(row.credential_ref));
+    if (!token) throw new Error("钥匙串未找到云效凭证");
+    if (JSON.stringify(this.row(id, "yunxiao")) !== JSON.stringify(row))
+      throw new Error("云效配置已变化");
+    return { config, token };
+  }
   async feishuSession(id: string) {
     const row = this.row(id, "feishu");
     if (!row?.credential_ref) throw new Error("请先保存飞书配置");

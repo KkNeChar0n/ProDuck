@@ -31,7 +31,7 @@ export function ProjectSettings({ project }: { project: Project }) {
         />
       ))}
       <p className="muted">
-        连接及凭证按项目隔离。飞书首次发布在文档页操作；云效状态同步尚未开放。
+        连接及凭证按项目隔离。飞书首次发布在文档页操作；飞书发布成功后可按配置同步云效状态。
       </p>
       {error && (
         <p role="alert" className="error">

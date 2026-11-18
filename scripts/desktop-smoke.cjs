@@ -13,6 +13,7 @@ const { createServer } = require("node:http");
 let server,
   credentialRef,
   platformCredentialRef,
+  yunxiaoCredentialRef,
   plannerCalls = 0;
 async function cleanup() {
   if (credentialRef) {
@@ -29,6 +30,12 @@ async function cleanup() {
       platformCredentialRef,
     );
     platformCredentialRef = null;
+  }
+  if (yunxiaoCredentialRef) {
+    const { MacKeychain } = await import("../dist/integrations/credentials.js");
+    await new MacKeychain(resolve("dist/native/produck-keychain")).delete(
+      yunxiaoCredentialRef,
+    );
   }
   if (server) server.close();
 }
@@ -65,12 +72,39 @@ const wait = async (w, expression) => {
 (async () => {
   const originalFetch = globalThis.fetch;
   const feishuFixture = require("./feishu-fixture.cjs")();
+  let yunxiaoWrites = 0;
+  let itemStatus = { id: "todo", name: "待开始" };
   globalThis.fetch = (url, init) =>
-    String(url).startsWith("https://open.feishu.cn/")
-      ? feishuFixture.fetch(url, init)
-      : originalFetch(url, init);
+    String(url).startsWith("https://openapi-rdc.aliyuncs.com/")
+      ? (async () => {
+          if (init?.method === "PUT") {
+            assert.deepEqual(JSON.parse(init.body), { status: "design" });
+            yunxiaoWrites++;
+            itemStatus = { id: "design", name: "设计中" };
+            return new Response(null, { status: 204 });
+          }
+          if (String(url).endsWith("/workflows"))
+            return Response.json({
+              statuses: [{ id: "design", name: "设计中" }],
+            });
+          return Response.json({
+            id: "item",
+            subject: "模拟云效需求",
+            logicalStatus: "normal",
+            space: { id: "proj" },
+            workitemType: { id: "requirement" },
+            status: itemStatus,
+            updateStatusAt: "1",
+          });
+        })()
+      : String(url).startsWith("https://open.feishu.cn/")
+        ? feishuFixture.fetch(url, init)
+        : originalFetch(url, init);
   dialog.showMessageBox = async (_window, options) => {
-    assert(options.buttons.includes("确认发布到飞书"));
+    assert(
+      options.buttons.includes("确认发布到飞书") ||
+        options.buttons.includes("确认同步云效"),
+    );
     return { response: 1, checkboxChecked: false };
   };
   await import(pathToFileURL(resolve("dist/desktop/main.js")).href);
@@ -591,6 +625,49 @@ const wait = async (w, expression) => {
   assert.equal(published[0].state, "published");
   assert(published[0].steps.every((s) => s.state === "done"));
   assert.equal(feishuFixture.nodes.length, 2);
+  await wc.executeJavaScript(
+    `window.produck.platforms.save(${JSON.stringify(first.id)}, {provider:'yunxiao',url:'https://devops.aliyun.com/proj',organizationId:'org',projectId:'proj',statusMapping:{published:'design'},secret:'synthetic-yunxiao-token'})`,
+  );
+  const yunxiaoDb = new DatabaseSync(join(root, "profile", "projects.sqlite"));
+  yunxiaoCredentialRef = yunxiaoDb
+    .prepare(
+      "SELECT credential_ref FROM connections WHERE project_id=? AND provider='yunxiao'",
+    )
+    .get(first.id).credential_ref;
+  yunxiaoDb.close();
+  await wc.executeJavaScript(
+    `Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(document.querySelector('[aria-label="云效工作项 ID"]'),'item');document.querySelector('[aria-label="云效工作项 ID"]').dispatchEvent(new Event('input',{bubbles:true}))`,
+  );
+  await wait(
+    window,
+    `!Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='读取并准备同步').disabled`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='读取并准备同步').click()`,
+  );
+  await wait(window, `document.body.innerText.includes('模拟云效需求')`);
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='确认同步状态').click()`,
+  );
+  await wait(window, `document.body.innerText.includes('云效状态已读回确认')`);
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='读回核对（不重发）').click()`,
+  );
+  await wait(window, `document.body.innerText.includes('本次没有再次写入')`);
+  assert.equal(yunxiaoWrites, 1);
+  assert.equal(feishuFixture.nodes.length, 2);
+  const syncRows = await wc.executeJavaScript(
+    `window.produck.yunxiaoSync.list(${JSON.stringify(first.id)})`,
+  );
+  assert.equal(syncRows[0].state, "synced");
+  assert.equal(syncRows[0].readback.status.id, "design");
+  await wc.executeJavaScript(
+    `document.querySelector('[aria-label="云效工作项 ID"]').scrollIntoView({block:'start'});new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`,
+  );
+  writeFileSync(
+    "docs/verification/desktop-yunxiao.png",
+    (await wc.capturePage()).toPNG(),
+  );
   await wc.executeJavaScript(
     `document.querySelector('[aria-label="发布文档标题"]').scrollIntoView({block:'center'});new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`,
   );

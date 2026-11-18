@@ -1,3 +1,4 @@
+import { YunxiaoSyncPanel } from "./YunxiaoSyncPanel";
 import { DocumentChanges } from "./DocumentChanges";
 import { useEffect, useState } from "react";
 import type {
@@ -162,18 +163,28 @@ export function PublicationReviewPanel({
           )}
           {run && (
             <div role="status">
-              <p>{run.message ?? "发布处理中"}</p>
+              <p>
+                {run.message?.replace("云效尚未同步", "云效同步另有独立收据") ??
+                  "发布处理中"}
+              </p>
               {run.documentUrl && <p className="path">{run.documentUrl}</p>}
               <p>
                 已确认步骤 {run.steps.filter((s) => s.state === "done").length}/
-                {run.steps.length} · 云效未同步
+                {run.steps.length} · 云效状态见下方独立收据
               </p>
             </div>
           )}
         </>
       )}
       {run?.state === "published" && (
-        <DocumentChanges key={run.id} projectId={projectId} runId={run.id} />
+        <>
+          <YunxiaoSyncPanel
+            key={`sync-${run.id}`}
+            projectId={projectId}
+            publicationId={run.id}
+          />
+          <DocumentChanges key={run.id} projectId={projectId} runId={run.id} />
+        </>
       )}
       {error && (
         <p role="alert" className="error">

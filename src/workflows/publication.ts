@@ -370,7 +370,8 @@ export class PublicationWorkflow {
       )
         throw new Error("共用附件绑定读回不一致");
       run.state = "published";
-      run.message = "正文、截图文件及共用原型入口已读回核对；云效尚未同步";
+      run.message =
+        "正文、截图文件及共用原型入口已读回核对；云效同步另有独立收据";
       this.save(id, run);
       return run;
     } catch (error) {

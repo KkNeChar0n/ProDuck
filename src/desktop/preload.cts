@@ -2,6 +2,13 @@ import { contextBridge, ipcRenderer } from "electron";
 contextBridge.exposeInMainWorld(
   "produck",
   Object.freeze({
+    yunxiaoSync: {
+      list: (id: string) => ipcRenderer.invoke("yunxiao-sync:list", id),
+      prepare: (id: string, publicationId: string, itemId: string) =>
+        ipcRenderer.invoke("yunxiao-sync:prepare", id, publicationId, itemId),
+      execute: (id: string, syncId: string, digest: string) =>
+        ipcRenderer.invoke("yunxiao-sync:execute", id, syncId, digest),
+    },
     documentReviews: {
       preflight: (id: string, reviewId: string, digest: string) =>
         ipcRenderer.invoke("document-reviews:preflight", id, reviewId, digest),

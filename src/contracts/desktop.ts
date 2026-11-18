@@ -1,3 +1,4 @@
+import type { YunxiaoSync } from "./yunxiao.js";
 import type {
   RemoteDocumentSnapshot,
   DocumentChangeReview,
@@ -41,6 +42,19 @@ export interface DesktopInfo {
   platform: string;
 }
 export interface DesktopBridge {
+  yunxiaoSync: {
+    list(id: string): Promise<YunxiaoSync[]>;
+    prepare(
+      id: string,
+      publicationId: string,
+      itemId: string,
+    ): Promise<YunxiaoSync>;
+    execute(
+      id: string,
+      syncId: string,
+      digest: string,
+    ): Promise<YunxiaoSync | null>;
+  };
   documentReviews: {
     preflight(
       id: string,

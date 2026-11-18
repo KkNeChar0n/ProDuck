@@ -1,3 +1,5 @@
+import { YunxiaoClient } from "../integrations/yunxiao.js";
+import { YunxiaoSyncWorkflow } from "../workflows/yunxiao-sync.js";
 import { DocumentReviews } from "../workflows/document-review.js";
 import { PublicationWorkflow } from "../workflows/publication.js";
 import { FeishuClient } from "../integrations/feishu.js";
@@ -78,6 +80,49 @@ export function registerWorkbenchIpc(
       projects,
       reviews,
       async (id) => new FeishuClient((await platforms.feishuSession(id)).token),
+    );
+    const sync = new YunxiaoSyncWorkflow(
+      projects,
+      publisher,
+      platforms,
+      async (id) => {
+        const { config, token } = await platforms.yunxiaoSession(id);
+        return new YunxiaoClient(
+          config.organizationId!,
+          config.projectId!,
+          token,
+        );
+      },
+    );
+    ipcMain.handle("yunxiao-sync:list", (e, id: string) => {
+      trusted(e, id);
+      return sync.list(id);
+    });
+    ipcMain.handle(
+      "yunxiao-sync:prepare",
+      (e, id: string, publicationId: string, itemId: string) => {
+        trusted(e, id);
+        return sync.prepare(id, publicationId, itemId);
+      },
+    );
+    ipcMain.handle(
+      "yunxiao-sync:execute",
+      async (e, id: string, syncId: string, digest: string) => {
+        trusted(e, id);
+        const row = sync.review(id, syncId, digest);
+        if (!row.writeAttempted && row.state !== "synced") {
+          const choice = await dialog.showMessageBox(getWindow()!, {
+            type: "question",
+            buttons: ["取消", "确认同步云效"],
+            defaultId: 0,
+            cancelId: 0,
+            message: "更新这个云效工作项的状态？",
+            detail: `项目：${row.projectId}\n工作项：${row.item.title}（${row.item.id}）\n${row.item.status.name} → ${row.target.name}\n仅更新状态，飞书发布成果独立保留。`,
+          });
+          if (choice.response !== 1) return null;
+        }
+        return sync.execute(id, syncId, digest);
+      },
     );
     const changes = new DocumentReviews(
       projects,
