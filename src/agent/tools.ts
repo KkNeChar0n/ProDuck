@@ -22,7 +22,7 @@ export interface BrowserTools {
     value?: string,
   ): Promise<unknown>;
 }
-interface Tool {
+export interface AgentTool {
   description: ToolDescription;
   run(
     ctx: ToolContext,
@@ -31,11 +31,12 @@ interface Tool {
 }
 /** The model supplies arguments only. Project scope, run identity and authorization come from the host. */
 export class ToolRegistry {
-  private tools = new Map<string, Tool>();
+  private tools = new Map<string, AgentTool>();
   constructor(
     private projects: ProjectRepository,
     versions: PrototypeRepository,
     private browser: BrowserTools,
+    additional: AgentTool[] = [],
   ) {
     const register = (
       name: string,
@@ -43,7 +44,7 @@ export class ToolRegistry {
       args: Record<string, "string">,
       required: string[],
       approval: boolean,
-      run: Tool["run"],
+      run: AgentTool["run"],
     ) =>
       this.tools.set(name, {
         description: { name, description, args, required, approval },
@@ -149,6 +150,11 @@ export class ToolRegistry {
         return browser.action(c.projectId, a.action, a.selector, a.value);
       },
     );
+    for (const tool of additional) {
+      if (this.tools.has(tool.description.name))
+        throw new Error("工具名称重复");
+      this.tools.set(tool.description.name, tool);
+    }
   }
   descriptions() {
     return [...this.tools.values()].map((t) => t.description);

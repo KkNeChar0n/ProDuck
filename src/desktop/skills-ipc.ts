@@ -21,7 +21,7 @@ export function registerSkillsIpc(
   };
   ipcMain.handle("skills:list", (e, id: string) => {
     trusted(e);
-    return skills.list(id);
+    return skills.available(id);
   });
   ipcMain.handle("skills:import", async (e, id: string) => {
     const win = trusted(e);

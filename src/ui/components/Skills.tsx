@@ -16,7 +16,9 @@ export function Skills({
   useEffect(() => {
     void desktop()
       .skills.list(projectId)
-      .then(setSkills)
+      .then((items) =>
+        setSkills(items.filter((item) => !item.id.startsWith("builtin:"))),
+      )
       .catch((e) => setError(errorText(e)));
   }, [projectId]);
   return (
@@ -47,6 +49,10 @@ export function Skills({
           </button>
         </section>
       ))}
+      <p>
+        工作流页的 Agent 技能选择器中还可选择“内置 · 原型制作”和“内置 · PRD
+        草稿”，由 Agent 准备本地成果；具体生成操作逐次确认。
+      </p>
       <h2>导入的 Skills</h2>
       <p>
         导入包含 SKILL.md 的文件夹。纯说明技能可供 Agent
@@ -57,7 +63,12 @@ export function Skills({
         onClick={async () => {
           try {
             const skill = await desktop().skills.import(projectId);
-            if (skill) setSkills(await desktop().skills.list(projectId));
+            if (skill)
+              setSkills(
+                (await desktop().skills.list(projectId)).filter(
+                  (item) => !item.id.startsWith("builtin:"),
+                ),
+              );
             setError("");
           } catch (e) {
             setError(errorText(e));

@@ -81,8 +81,10 @@ python3 tests/prototype_smoke.py
 npm run package:mac
 ```
 
-输出 `release/Produck-0.1.7-arm64-test.dmg`，包含 Electron、编译后的钥匙串程序与应用资源。目标最低系统为 macOS 13，当前只在 macOS 26.3 arm64 上构建和检查；尚未在最低系统或无开发工具的机器完成验收。
+输出 `release/Produck-0.1.8-arm64-test.dmg`，包含 Electron、编译后的钥匙串程序与应用资源。目标最低系统为 macOS 13，当前只在 macOS 26.3 arm64 上构建和检查；尚未在最低系统或无开发工具的机器完成验收。
 
 包使用临时签名，未完成 Developer ID 签名和公证，不用于公开分发。安装包未提交 Git；第三方运行组件许可证随包保存。打包验证不代表真实模型与平台集成已通过。
 
 内置工作流入口位于 Skills 页面，包含原型制作、PRD 首次发布和只读差异评审。详见 [内置工作流范围](docs/verification/builtin-workflows.md) 与 [平台恢复验证](docs/verification/platform-recovery.md)。
+
+工作流页现可选择“内置 · 原型制作”和“内置 · PRD 草稿”。Agent 可查看项目成果，在逐步批准后生成候选/草稿；原型通过、文档发布和平台状态更新仍在原有界面独立确认。

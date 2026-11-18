@@ -130,7 +130,9 @@ export class PrototypeGenerator {
     change?: string,
     baselineId?: string,
     edit?: PrototypeEdit,
+    parentSignal?: AbortSignal,
   ) {
+    if (parentSignal?.aborted) throw new Error("任务已取消");
     if (this.active.has(projectId)) throw new Error("当前项目已有原型生成任务");
     const project = this.projects.get(projectId),
       capture = getCapture(project.workspace, captureId),
@@ -153,6 +155,9 @@ export class PrototypeGenerator {
       }),
     );
     this.active.set(projectId, controller);
+    const abort = () => controller.abort();
+    parentSignal?.addEventListener("abort", abort, { once: true });
+    if (parentSignal?.aborted) controller.abort();
     this.db
       .prepare("INSERT INTO task_runs VALUES(?,?,?,?)")
       .run(runId, projectId, "running", new Date().toISOString());
@@ -228,6 +233,7 @@ export class PrototypeGenerator {
       note(state, error instanceof Error ? error.message : "生成失败");
       throw error;
     } finally {
+      parentSignal?.removeEventListener("abort", abort);
       this.active.delete(projectId);
     }
   }

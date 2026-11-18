@@ -14,7 +14,9 @@ let server,
   credentialRef,
   platformCredentialRef,
   yunxiaoCredentialRef,
-  plannerCalls = 0;
+  plannerCalls = 0,
+  builtinCalls = 0,
+  builtinArgs;
 async function cleanup() {
   if (credentialRef) {
     const { MacKeychain } = await import("../dist/integrations/credentials.js");
@@ -245,7 +247,20 @@ const wait = async (w, expression) => {
           : data.messages[0].content.includes("Markdown PRD")
             ? "# 客户管理 PRD\n\n## 目标\n支持筛选和新增客户。\n\n## 待确认\n权限规则待确认。"
             : "模型流式响应已验证";
-        if (data.messages[0].content.includes("只返回一个 JSON")) {
+        if (
+          data.messages[0].content.includes("只返回一个 JSON") &&
+          data.messages[0].content.includes("BUILTIN_PRD_TEST")
+        ) {
+          assert(data.messages[0].content.includes("不得声称已经发布"));
+          builtinCalls++;
+          content = JSON.stringify(
+            builtinCalls === 1
+              ? { call: { tool: "product_artifacts", args: {} } }
+              : builtinCalls === 2
+                ? { call: { tool: "generate_prd", args: builtinArgs } }
+                : { done: "内置技能已保存草稿，等待人工审阅。" },
+          );
+        } else if (data.messages[0].content.includes("只返回一个 JSON")) {
           assert(data.messages[0].content.includes("SKILL_FIXTURE_MARKER"));
           plannerCalls++;
           content = JSON.stringify(
@@ -521,7 +536,7 @@ const wait = async (w, expression) => {
   );
   await wait(
     window,
-    `document.querySelector('[aria-label="Agent 技能"]')?.options.length===2`,
+    `document.querySelector('[aria-label="Agent 技能"]')?.options.length===4`,
   );
   await wc.executeJavaScript(
     `document.querySelector('[aria-label="Agent 技能"]').value=${JSON.stringify(importedSkills[0].id)};document.querySelector('[aria-label="Agent 技能"]').dispatchEvent(new Event('change',{bubbles:true}));`,
@@ -764,6 +779,73 @@ const wait = async (w, expression) => {
   await wait(
     window,
     `document.body.innerText.includes('预检通过：涉及 1 个文字块')`,
+  );
+  const beforeBuiltinDrafts = await wc.executeJavaScript(
+    `window.produck.documents.list(${JSON.stringify(first.id)})`,
+  );
+  builtinArgs = {
+    versionId: drafts[0].versionId,
+    stateIds: JSON.stringify(drafts[0].stateIds),
+    goal: "BUILTIN_PRD_TEST 草稿",
+  };
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('nav button')).find(b=>b.textContent.includes('工作流')).click()`,
+  );
+  await wait(
+    window,
+    `Array.from(document.querySelector('[aria-label="Agent 技能"]').options).some(o=>o.value==='builtin:prd')`,
+  );
+  await wc.executeJavaScript(
+    `document.querySelector('[aria-label="Agent 技能"]').value='builtin:prd';document.querySelector('[aria-label="Agent 技能"]').dispatchEvent(new Event('change',{bubbles:true}));Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(document.querySelector('[aria-label="Agent 任务要求"]'),'BUILTIN_PRD_TEST');document.querySelector('[aria-label="Agent 任务要求"]').dispatchEvent(new Event('input',{bubbles:true}))`,
+  );
+  await wait(
+    window,
+    `!Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='执行任务').disabled`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='执行任务').click()`,
+  );
+  await wait(
+    window,
+    `Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='批准这一步')`,
+  );
+  assert.equal(
+    (
+      await wc.executeJavaScript(
+        `window.produck.documents.list(${JSON.stringify(first.id)})`,
+      )
+    ).length,
+    beforeBuiltinDrafts.length,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='批准这一步').click()`,
+  );
+  await wait(
+    window,
+    `document.body.innerText.includes('内置技能已保存草稿，等待人工审阅。')`,
+  );
+  const builtinRuns = await wc.executeJavaScript(
+    `window.produck.agent.list(${JSON.stringify(first.id)})`,
+  );
+  const builtinRun = builtinRuns.find((r) => r.skill?.id === "builtin:prd");
+  assert.equal(builtinRun.state, "succeeded");
+  assert.deepEqual(
+    builtinRun.steps.map((s) => s.call.tool),
+    ["product_artifacts", "generate_prd"],
+  );
+  assert.equal(
+    (
+      await wc.executeJavaScript(
+        `window.produck.documents.list(${JSON.stringify(first.id)})`,
+      )
+    ).length,
+    beforeBuiltinDrafts.length + 1,
+  );
+  assert.equal(feishuFixture.nodes.length, 2);
+  assert.equal(yunxiaoWrites, 1);
+  writeFileSync(
+    "docs/verification/desktop-agent-prd.png",
+    (await wc.capturePage()).toPNG(),
   );
   assert.equal(await wc.executeJavaScript("typeof require"), "undefined");
   assert.equal(errors.length, 0, errors.join("\n"));

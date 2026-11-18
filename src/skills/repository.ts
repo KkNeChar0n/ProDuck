@@ -1,3 +1,4 @@
+import { agentBuiltins, builtinSkillRecords } from "./agent-builtins.js";
 import { readFileSync, readdirSync, lstatSync, existsSync } from "node:fs";
 import { join, relative, resolve, isAbsolute, extname } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
@@ -34,6 +35,9 @@ export class SkillRepository {
       "skills/index.json",
     );
     return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : [];
+  }
+  available(id: string): ImportedSkill[] {
+    return [...this.list(id), ...builtinSkillRecords()];
   }
   import(id: string, source: string): ImportedSkill {
     const project = this.projects.get(id),
@@ -187,6 +191,14 @@ export class SkillRepository {
     return hash.digest("hex");
   }
   instructions(id: string, skillId: string) {
+    this.projects.get(id);
+    const builtin = agentBuiltins.find((s) => s.id === skillId);
+    if (builtin)
+      return {
+        id: builtin.id,
+        fingerprint: builtin.fingerprint,
+        text: builtin.text,
+      };
     const record = this.list(id).find((s) => s.id === skillId);
     if (!record) throw new Error("技能不属于当前项目");
     if (record.status === "unsupported")

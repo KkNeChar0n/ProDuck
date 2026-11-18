@@ -3,6 +3,10 @@ import { useEffect, useState } from "react";
 import type { AgentRun } from "../../contracts/agent";
 import { desktop, errorText } from "../bridge";
 const names: Record<string, string> = {
+  product_artifacts: "查看原型与文档成果",
+  generate_prototype: "生成候选原型",
+  generate_prd: "生成 PRD 草稿",
+  read_prd: "读取 PRD 草稿",
   project_sources: "查看项目资料",
   read_source: "读取交接资料",
   search_memory: "检索项目记忆",
@@ -56,8 +60,8 @@ export function AgentTasks({ projectId }: { projectId: string }) {
     <section className="paper">
       <h2>Agent 任务</h2>
       <p className="muted">
-        Agent
-        可按需读取当前项目资料并发送给项目模型。保存笔记和操作真实网页前，会列出具体内容等待你批准。
+        Agent 可按需读取当前项目资料并发送给项目模型。保存笔记、生成候选原型/PRD
+        和操作真实网页前，会列出具体内容等待你批准。生成后请到工作台或文档页审阅；通过版本和发布仍需独立确认。
       </p>
       {error && (
         <p className="error" role="alert">

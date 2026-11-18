@@ -1,3 +1,4 @@
+import { productTools } from "../agent/product-tools.js";
 import { YunxiaoClient } from "../integrations/yunxiao.js";
 import { YunxiaoSyncWorkflow } from "../workflows/yunxiao-sync.js";
 import { DocumentReviews } from "../workflows/document-review.js";
@@ -44,16 +45,22 @@ export function registerWorkbenchIpc(
     preview = new PrototypeSurface(getWindow),
     versions = new PrototypeRepository(db, projects),
     generator = new PrototypeGenerator(db, projects, models, versions);
-  const tools = new ToolRegistry(projects, versions, {
-    context: (id) => browser.context(id),
-    open: (id, url) => browser.open(id, url),
-    action: (id, action, selector, value) =>
-      browser.action(id, action, selector, value),
-    capture: async (id) => {
-      const { png, ...value } = await browser.capture(id);
-      return saveCapture(projects.get(id).workspace, value, png);
+  const documents = new DocumentWorkflow(projects, versions, models);
+  const tools = new ToolRegistry(
+    projects,
+    versions,
+    {
+      context: (id) => browser.context(id),
+      open: (id, url) => browser.open(id, url),
+      action: (id, action, selector, value) =>
+        browser.action(id, action, selector, value),
+      capture: async (id) => {
+        const { png, ...value } = await browser.capture(id);
+        return saveCapture(projects.get(id).workspace, value, png);
+      },
     },
-  });
+    productTools(versions, generator, documents),
+  );
   const skills = new SkillRepository(projects);
   registerSkillsIpc(skills, getWindow);
   const agent = new AgentRunner(
@@ -68,7 +75,6 @@ export function registerWorkbenchIpc(
     skills,
   );
   registerAgentIpc(agent, getWindow);
-  const documents = new DocumentWorkflow(projects, versions, models);
   if (platforms) {
     const reviews = new PublicationReviews(
       projects,
