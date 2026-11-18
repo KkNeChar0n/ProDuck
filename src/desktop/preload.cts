@@ -3,6 +3,9 @@ contextBridge.exposeInMainWorld(
   "produck",
   Object.freeze({
     publication: {
+      runs: (id: string) => ipcRenderer.invoke("publication:runs", id),
+      publish: (id: string, reviewId: string, digest: string, title: string) =>
+        ipcRenderer.invoke("publication:publish", id, reviewId, digest, title),
       list: (id: string) => ipcRenderer.invoke("publication:list", id),
       prepare: (id: string, draftId: string) =>
         ipcRenderer.invoke("publication:prepare", id, draftId),

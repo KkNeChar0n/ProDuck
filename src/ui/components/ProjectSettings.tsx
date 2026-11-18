@@ -31,7 +31,7 @@ export function ProjectSettings({ project }: { project: Project }) {
         />
       ))}
       <p className="muted">
-        连接及凭证按项目隔离。当前提供配置和只读测试，平台发布与状态同步尚未开放。
+        连接及凭证按项目隔离。飞书首次发布在文档页操作；云效状态同步尚未开放。
       </p>
       {error && (
         <p role="alert" className="error">

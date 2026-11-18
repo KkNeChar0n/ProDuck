@@ -158,6 +158,33 @@ export class PlatformService {
       throw new Error("平台返回无效数据，未确认连接成功");
     }
   }
+  async feishuSession(id: string) {
+    const row = this.row(id, "feishu");
+    if (!row?.credential_ref) throw new Error("请先保存飞书配置");
+    const config = validate({
+      ...JSON.parse(String(row.config_json)),
+      provider: "feishu",
+    });
+    const secret = await this.credentials.get(String(row.credential_ref));
+    if (!secret) throw new Error("钥匙串未找到飞书凭证");
+    const auth = await this.request(
+      "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ app_id: config.appId, app_secret: secret }),
+      },
+    );
+    if (
+      auth.code !== 0 ||
+      typeof auth.tenant_access_token !== "string" ||
+      !auth.tenant_access_token
+    )
+      throw new Error("飞书应用鉴权失败");
+    if (JSON.stringify(this.row(id, "feishu")) !== JSON.stringify(row))
+      throw new Error("飞书配置已变化");
+    return { token: auth.tenant_access_token as string, config };
+  }
   async test(id: string, provider: Platform): Promise<ConnectionTest> {
     const row = this.row(id, provider);
     if (!row?.credential_ref) throw new Error("请先保存当前项目的平台配置");

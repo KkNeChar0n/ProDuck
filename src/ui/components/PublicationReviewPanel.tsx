@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import type { PublicationReview } from "../../contracts/publication";
+import type {
+  PublicationReview,
+  PublicationRun,
+} from "../../contracts/publication";
 import { desktop, errorText } from "../bridge";
 export function PublicationReviewPanel({
   projectId,
@@ -9,10 +12,24 @@ export function PublicationReviewPanel({
   draftId: string;
 }) {
   const [review, setReview] = useState<PublicationReview | null>(null),
+    [run, setRun] = useState<PublicationRun | null>(null),
+    [title, setTitle] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   useEffect(() => {
     let active = true;
+    desktop()
+      .publication.runs(projectId)
+      .then((runs) => {
+        if (active) {
+          const current = runs.find((r) => r.draftId === draftId);
+          setRun(current ?? null);
+          setTitle(current?.title ?? "");
+        }
+      })
+      .catch((e) => {
+        if (active) setError(errorText(e));
+      });
     desktop()
       .publication.list(projectId)
       .then((items) => {
@@ -40,10 +57,10 @@ export function PublicationReviewPanel({
     <section>
       <h3>发布材料审阅</h3>
       <p className="muted">
-        固定当前正文、状态截图和批准原型，并读取飞书迭代父节点。当前仅保存本地审阅包，尚不上传或创建飞书文档。
+        固定正文、截图和批准原型，核对飞书迭代父节点。确认材料后可发布；发布前会再次确认目标与内容。
       </p>
       <button
-        disabled={busy}
+        disabled={busy || !!run}
         onClick={() =>
           void perform(() => desktop().publication.prepare(projectId, draftId))
         }
@@ -66,7 +83,11 @@ export function PublicationReviewPanel({
           </ul>
           <p className="muted">
             材料指纹：{review.digest.slice(0, 16)} ·{" "}
-            {review.status === "approved" ? "已确认材料，未发布" : "待审阅"}
+            {run?.state === "published"
+              ? "已发布并读回验证"
+              : review.status === "approved"
+                ? "已确认材料，未发布"
+                : "待审阅"}
           </p>
           <button
             disabled={busy}
@@ -93,8 +114,61 @@ export function PublicationReviewPanel({
             确认材料与父节点
           </button>
           <p className="muted">
-            确认仅针对此份材料。未来发布前仍需核对内容和远端状态，并单独确认执行。
+            正文以 Markdown
+            原文段落写入，截图为独立图片。首版不自动覆盖不同版本的迭代共用原型。
           </p>
+          {review.status === "approved" && (
+            <>
+              <label>
+                需求文档标题
+                <input
+                  aria-label="发布文档标题"
+                  value={title}
+                  disabled={busy || !!run}
+                  maxLength={80}
+                  onChange={(e) => setTitle(e.target.value)}
+                />
+              </label>
+              <button
+                disabled={busy || !title.trim() || run?.state === "published"}
+                onClick={async () => {
+                  setBusy(true);
+                  setError("");
+                  try {
+                    const result = await desktop().publication.publish(
+                      projectId,
+                      review.id,
+                      review.digest,
+                      title,
+                    );
+                    if (result) setRun(result);
+                  } catch (e) {
+                    setError(errorText(e));
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                {busy
+                  ? "正在核对与发布…"
+                  : run?.state === "published"
+                    ? "已发布"
+                    : run
+                      ? "核对并继续发布"
+                      : "发布到飞书"}
+              </button>
+            </>
+          )}
+          {run && (
+            <div role="status">
+              <p>{run.message ?? "发布处理中"}</p>
+              {run.documentUrl && <p className="path">{run.documentUrl}</p>}
+              <p>
+                已确认步骤 {run.steps.filter((s) => s.state === "done").length}/
+                {run.steps.length} · 云效未同步
+              </p>
+            </div>
+          )}
         </>
       )}
       {error && (

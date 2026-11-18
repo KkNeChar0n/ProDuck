@@ -1,4 +1,4 @@
-import type { PublicationReview } from "./publication.js";
+import type { PublicationReview, PublicationRun } from "./publication.js";
 import type {
   Platform,
   PlatformInput,
@@ -37,6 +37,13 @@ export interface DesktopInfo {
 }
 export interface DesktopBridge {
   publication: {
+    runs(id: string): Promise<PublicationRun[]>;
+    publish(
+      id: string,
+      reviewId: string,
+      digest: string,
+      title: string,
+    ): Promise<PublicationRun | null>;
     list(id: string): Promise<PublicationReview[]>;
     prepare(id: string, draftId: string): Promise<PublicationReview>;
     approve(

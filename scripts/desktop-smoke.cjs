@@ -56,7 +56,7 @@ const ready = new Promise((resolve) =>
   ),
 );
 const wait = async (w, expression) => {
-  for (let i = 0; i < 100; i++) {
+  for (let i = 0; i < 200; i++) {
     if (await w.webContents.executeJavaScript(expression)) return;
     await new Promise((r) => setTimeout(r, 50));
   }
@@ -64,36 +64,14 @@ const wait = async (w, expression) => {
 };
 (async () => {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (url, init) => {
-    if (String(url).startsWith("https://open.feishu.cn/")) {
-      if (String(url).includes("tenant_access_token")) {
-        assert.equal(
-          JSON.parse(init.body).app_secret,
-          "synthetic-platform-secret",
-        );
-        return new Response(
-          JSON.stringify({ code: 0, tenant_access_token: "synthetic-tenant" }),
-        );
-      }
-      assert.equal(
-        String(url),
-        "https://open.feishu.cn/open-apis/wiki/v2/spaces/get_node?token=fixture",
-      );
-      return new Response(
-        JSON.stringify({
-          code: 0,
-          data: {
-            node: {
-              node_token: "fixture",
-              space_id: "space1",
-              obj_type: "docx",
-              title: "平台连接测试迭代",
-            },
-          },
-        }),
-      );
-    }
-    return originalFetch(url, init);
+  const feishuFixture = require("./feishu-fixture.cjs")();
+  globalThis.fetch = (url, init) =>
+    String(url).startsWith("https://open.feishu.cn/")
+      ? feishuFixture.fetch(url, init)
+      : originalFetch(url, init);
+  dialog.showMessageBox = async (_window, options) => {
+    assert(options.buttons.includes("确认发布到飞书"));
+    return { response: 1, checkboxChecked: false };
   };
   await import(pathToFileURL(resolve("dist/desktop/main.js")).href);
   const window = await ready;
@@ -594,6 +572,30 @@ const wait = async (w, expression) => {
   );
   writeFileSync(
     "docs/verification/desktop-publication-review.png",
+    (await wc.capturePage()).toPNG(),
+  );
+  await wc.executeJavaScript(
+    `Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(document.querySelector('[aria-label="发布文档标题"]'),'客户管理需求');document.querySelector('[aria-label="发布文档标题"]').dispatchEvent(new Event('input',{bubbles:true}))`,
+  );
+  await wait(
+    window,
+    `!Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='发布到飞书').disabled`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='发布到飞书').click()`,
+  );
+  await wait(window, `document.body.innerText.includes('已发布并读回验证')`);
+  const published = await wc.executeJavaScript(
+    `window.produck.publication.runs(${JSON.stringify(first.id)})`,
+  );
+  assert.equal(published[0].state, "published");
+  assert(published[0].steps.every((s) => s.state === "done"));
+  assert.equal(feishuFixture.nodes.length, 2);
+  await wc.executeJavaScript(
+    `document.querySelector('[aria-label="发布文档标题"]').scrollIntoView({block:'center'});new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`,
+  );
+  writeFileSync(
+    "docs/verification/desktop-published.png",
     (await wc.capturePage()).toPNG(),
   );
   assert.equal(await wc.executeJavaScript("typeof require"), "undefined");

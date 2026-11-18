@@ -1,3 +1,5 @@
+import { PublicationWorkflow } from "../workflows/publication.js";
+import { FeishuClient } from "../integrations/feishu.js";
 import { PublicationReviews } from "../workflows/publication-review.js";
 import type { PlatformService } from "../integrations/platform-service.js";
 import { SkillRepository } from "../skills/repository.js";
@@ -70,6 +72,40 @@ export function registerWorkbenchIpc(
       versions,
       documents,
       platforms,
+    );
+    const publisher = new PublicationWorkflow(
+      projects,
+      reviews,
+      async (id) => new FeishuClient((await platforms.feishuSession(id)).token),
+    );
+    ipcMain.handle("publication:runs", (e, id: string) => {
+      trusted(e, id);
+      return publisher.list(id);
+    });
+    ipcMain.handle(
+      "publication:publish",
+      async (
+        e,
+        id: string,
+        reviewId: string,
+        digest: string,
+        title: string,
+      ) => {
+        trusted(e, id);
+        const review = reviews.verify(id, reviewId);
+        if (review.status !== "approved" || review.digest !== digest)
+          throw new Error("请先确认发布材料");
+        const choice = await dialog.showMessageBox(getWindow()!, {
+          type: "question",
+          buttons: ["取消", "确认发布到飞书"],
+          defaultId: 0,
+          cancelId: 0,
+          message: "发布这份已审阅的需求文档？",
+          detail: `标题：${title}\n目标：${review.parent.title}\n${review.parent.url}\n将创建需求文档、上传截图并维护共用原型附件。恢复时只继续未完成步骤；不会同步云效。`,
+        });
+        if (choice.response !== 1) return null;
+        return publisher.publish(id, reviewId, digest, title);
+      },
     );
     ipcMain.handle("publication:list", (e, id: string) => {
       trusted(e, id);

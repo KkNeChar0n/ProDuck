@@ -18,6 +18,7 @@
 - 模型文本/图像/原生工具能力检测，原型元素 ID 保持、基础表单状态恢复及人工交互检查记录。
 - 飞书自建应用 / 云效中心版 PAT 配置、项目隔离钥匙串凭证及只读连接测试；可配置云效状态 ID 映射（尚不执行同步）。
 - 发布前本地审阅包：固定正文、截图和批准原型，核对飞书父节点，绑定材料指纹；确认材料不会执行发布。
+- 飞书首次发布：单独确认后创建需求子文档、维护共用原型附件、上传截图并读回校验正文及文件；保存阶段收据，结果不明时阻止盲目重试。
 - 隔离 IPC、原型网络限制、本地 SQLite schema 和原子文件存储。
 
 ## 体验界面原型
@@ -71,7 +72,7 @@ python3 tests/prototype_smoke.py
 
 [任务清单](openspec/changes/produck-mvp/tasks.md) 按验证结果勾选。界面已获用户确认；模型与原型、PRD 流程通过本地模拟 API 测试。用户已要求暂时跳过真实模型验证，因此重建视觉与交互质量未验收。普通问答仍为独立请求，不保存对话历史。
 
-飞书/云效发布、完整技能运行器、干净机器验收尚未完成。详见 [原型验证记录](docs/verification/prototype-workflow.md) 和 [Agent/Skill 验证记录](docs/verification/agent-skills.md)、[平台连接验证记录](docs/verification/platform-connections.md)。
+飞书首次发布已接入（模拟平台验证通过，真实租户待联调）；线上差异合并、云效同步、完整技能运行器、干净机器验收尚未完成。详见 [原型验证记录](docs/verification/prototype-workflow.md) 和 [Agent/Skill 验证记录](docs/verification/agent-skills.md)、[平台连接验证记录](docs/verification/platform-connections.md)、[首次发布验证记录](docs/verification/feishu-publication.md)。
 
 ## macOS 开发测试包
 
@@ -79,6 +80,6 @@ python3 tests/prototype_smoke.py
 npm run package:mac
 ```
 
-输出 `release/Produck-0.1.3-arm64-test.dmg`，包含 Electron、编译后的钥匙串程序与应用资源。目标最低系统为 macOS 13，当前只在 macOS 26.3 arm64 上构建和检查；尚未在最低系统或无开发工具的机器完成验收。
+输出 `release/Produck-0.1.4-arm64-test.dmg`，包含 Electron、编译后的钥匙串程序与应用资源。目标最低系统为 macOS 13，当前只在 macOS 26.3 arm64 上构建和检查；尚未在最低系统或无开发工具的机器完成验收。
 
 包使用临时签名，未完成 Developer ID 签名和公证，不用于公开分发。安装包未提交 Git；第三方运行组件许可证随包保存。打包验证不代表真实模型与平台集成已通过。
