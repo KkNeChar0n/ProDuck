@@ -73,7 +73,7 @@ python3 tests/prototype_smoke.py
 
 [任务清单](openspec/changes/produck-mvp/tasks.md) 按验证结果勾选。界面已获用户确认；模型与原型、PRD 流程通过本地模拟 API 测试。用户已要求暂时跳过真实模型验证，因此重建视觉与交互质量未验收。普通问答仍为独立请求，不保存对话历史。
 
-飞书首次发布已接入（模拟平台验证通过，真实租户待联调）；云效状态同步已接入（模拟平台验证）；线上差异合并按用户选择暂缓，完整技能运行器、干净机器验收尚未完成。详见 [原型验证记录](docs/verification/prototype-workflow.md) 和 [Agent/Skill 验证记录](docs/verification/agent-skills.md)、[平台连接验证记录](docs/verification/platform-connections.md)、[首次发布验证记录](docs/verification/feishu-publication.md)、[文档差异验证记录](docs/verification/document-diff.md)。
+飞书首次发布已接入（模拟平台验证通过，真实租户待联调）；云效状态同步已接入（模拟平台验证）；线上差异合并按用户选择暂缓，已支持受限标准库 Python 技能；任意第三方依赖、干净机器验收尚未完成。详见 [原型验证记录](docs/verification/prototype-workflow.md) 和 [Agent/Skill 验证记录](docs/verification/agent-skills.md)、[平台连接验证记录](docs/verification/platform-connections.md)、[首次发布验证记录](docs/verification/feishu-publication.md)、[文档差异验证记录](docs/verification/document-diff.md)。
 
 ## macOS 开发测试包
 
@@ -81,7 +81,7 @@ python3 tests/prototype_smoke.py
 npm run package:mac
 ```
 
-输出 `release/Produck-0.1.11-arm64-test.dmg`，包含 Electron、编译后的钥匙串程序与应用资源。目标最低系统为 macOS 13，当前只在 macOS 26.3 arm64 上构建和检查；尚未在最低系统或无开发工具的机器完成验收。
+输出 `release/Produck-0.1.12-arm64-test.dmg`，包含 Electron、编译后的钥匙串程序与应用资源。目标最低系统为 macOS 13，当前只在 macOS 26.3 arm64 上构建和检查；尚未在最低系统或无开发工具的机器完成验收。
 
 包使用临时签名，未完成 Developer ID 签名和公证，不用于公开分发。安装包未提交 Git；第三方运行组件许可证随包保存。打包验证不代表真实模型与平台集成已通过。
 
@@ -94,3 +94,5 @@ npm run package:mac
 安装包自带运行资源清单，可运行 `npm run test:packaged` 验证 DMG 提取副本的资源哈希及无 CLI 模拟闭环。详情见 [随包运行时验证](docs/verification/packaged-runtime.md)。
 
 已支持声明式标准库 Python Skill，运行时随安装包提供。导入 [Python 汇总示例](examples/python-summary)，在 Skills 页填写 JSON 并逐次授权运行；文件和网络范围、依赖限制见 [Python 技能说明](docs/verification/python-skills.md)。
+
+当前功能边界、剩余验收条件与记录模板集中在 [首版验收清单](docs/verification/release-readiness.md)。运行组件许可扫描记录可通过 `node scripts/audit-runtime-licenses.mjs` 更新；已补充对应 Python 完整构建元数据引用的原生组件许可文本，正式签名与公证仍待完成。

@@ -1,0 +1,171 @@
+{
+  "pythonVersion": "3.12.16",
+  "target": "aarch64-apple-darwin",
+  "sourceArchive": "cpython-3.12.16+20261110-aarch64-apple-darwin-pgo+lto-full.tar.zst",
+  "sourceSha256": "4da072af9dbbc2557d3aabf51db553a19694f6ac61b5b7169749e4acfa5a052d",
+  "installBinarySha256": "54788b15120aa4f534da3f59b59f46658a9bfdc3d3d9c8b3af1459002e307c90",
+  "coreLicenses": [
+    "Python-2.0",
+    "CNRI-Python"
+  ],
+  "coreLicenseFile": "LICENSE.cpython.txt",
+  "extensions": [
+    {
+      "module": "_bz2",
+      "licenses": [
+        "bzip2-1.0.6"
+      ],
+      "publicDomain": false,
+      "licenseFiles": [
+        "LICENSE.bzip2.txt"
+      ]
+    },
+    {
+      "module": "_ctypes",
+      "licenses": [
+        "MIT"
+      ],
+      "publicDomain": false,
+      "licenseFiles": [
+        "LICENSE.libffi.txt"
+      ]
+    },
+    {
+      "module": "_curses",
+      "licenses": [
+        "X11"
+      ],
+      "publicDomain": false,
+      "licenseFiles": [
+        "LICENSE.ncurses.txt"
+      ]
+    },
+    {
+      "module": "_curses_panel",
+      "licenses": [
+        "X11"
+      ],
+      "publicDomain": false,
+      "licenseFiles": [
+        "LICENSE.ncurses.txt"
+      ]
+    },
+    {
+      "module": "_decimal",
+      "licenses": [
+        "BSD-2-Clause"
+      ],
+      "publicDomain": false,
+      "licenseFiles": [
+        "LICENSE.mpdecimal.txt"
+      ]
+    },
+    {
+      "module": "_hashlib",
+      "licenses": [
+        "Apache-2.0"
+      ],
+      "publicDomain": false,
+      "licenseFiles": [
+        "LICENSE.openssl-3.txt"
+      ]
+    },
+    {
+      "module": "_lzma",
+      "licenses": [
+        "0BSD"
+      ],
+      "publicDomain": false,
+      "licenseFiles": [
+        "LICENSE.liblzma.txt"
+      ]
+    },
+    {
+      "module": "_sqlite3",
+      "licenses": [
+        "Zlib"
+      ],
+      "publicDomain": false,
+      "licenseFiles": [
+        "LICENSE.sqlite.txt",
+        "LICENSE.zlib-ng.txt",
+        "LICENSE.zlib.txt"
+      ]
+    },
+    {
+      "module": "_ssl",
+      "licenses": [
+        "Apache-2.0"
+      ],
+      "publicDomain": false,
+      "licenseFiles": [
+        "LICENSE.openssl-3.txt"
+      ]
+    },
+    {
+      "module": "_tkinter",
+      "licenses": [
+        "TCL",
+        "Zlib"
+      ],
+      "publicDomain": false,
+      "licenseFiles": [
+        "LICENSE.tcl.txt",
+        "LICENSE.zlib-ng.txt",
+        "LICENSE.zlib.txt"
+      ]
+    },
+    {
+      "module": "_uuid",
+      "licenses": [
+        "BSD-3-Clause"
+      ],
+      "publicDomain": false,
+      "licenseFiles": [
+        "LICENSE.libuuid.txt"
+      ]
+    },
+    {
+      "module": "binascii",
+      "licenses": [
+        "Zlib"
+      ],
+      "publicDomain": false,
+      "licenseFiles": [
+        "LICENSE.zlib-ng.txt",
+        "LICENSE.zlib.txt"
+      ]
+    },
+    {
+      "module": "pyexpat",
+      "licenses": [
+        "MIT"
+      ],
+      "publicDomain": false,
+      "licenseFiles": [
+        "LICENSE.expat.txt"
+      ]
+    },
+    {
+      "module": "readline",
+      "licenses": [
+        "BSD-3-Clause"
+      ],
+      "publicDomain": false,
+      "licenseFiles": [
+        "LICENSE.libedit.txt"
+      ]
+    },
+    {
+      "module": "zlib",
+      "licenses": [
+        "Zlib"
+      ],
+      "publicDomain": false,
+      "licenseFiles": [
+        "LICENSE.zlib-ng.txt",
+        "LICENSE.zlib.txt"
+      ]
+    }
+  ]
+}

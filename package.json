@@ -1,6 +1,6 @@
 {
   "name": "produck",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "private": true,
   "description": "A local-first product manager agent for macOS",
   "type": "module",

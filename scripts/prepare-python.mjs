@@ -44,3 +44,17 @@ cpSync("vendor/python", "dist/python", {
 });
 cpSync(stamp, "dist/python/PRODUCK-RUNTIME.json");
 console.log(`Bundled Python ${config.version}; no system Python required`);
+
+const notices = JSON.parse(
+  readFileSync("third-party/python/components.json", "utf8"),
+);
+for (const file of new Set([
+  notices.coreLicenseFile,
+  ...notices.extensions.flatMap((x) => x.licenseFiles),
+])) {
+  if (!existsSync(`third-party/python/${file}`))
+    throw new Error(`缺少 Python 许可：${file}`);
+}
+cpSync("third-party/python", "dist/python/PRODUCK-LICENSES", {
+  recursive: true,
+});
