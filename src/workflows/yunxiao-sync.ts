@@ -18,7 +18,7 @@ export class YunxiaoSyncWorkflow {
   ) {}
   private path(id: string) {
     return projectPath(
-      this.projects.get(id).workspace,
+      this.projects.context(id).workspace,
       "workflows/yunxiao-sync.json",
     );
   }

@@ -25,10 +25,10 @@ export function registerProjectIpc(
       return fn(...args);
     });
   handle("projects:sources", (id: string) =>
-    listSources(repository.get(id).workspace),
+    listSources(repository.shared(id).workspace),
   );
   handle("projects:import-source", async (id: string) => {
-    const project = repository.get(id);
+    const project = repository.shared(id);
     const picked = await dialog.showOpenDialog(getWindow()!, {
       title: "导入交接资料",
       properties: ["openFile"],
@@ -37,6 +37,16 @@ export function registerProjectIpc(
     if (picked.canceled) return null;
     return importSource(project.workspace, picked.filePaths[0]);
   });
+  handle("releases:create", (projectId: string, name: string) => {
+    const release = repository.createRelease(projectId, name);
+    return repository.selectRelease(projectId, release.id);
+  });
+  handle("releases:select", (projectId: string, releaseId: string) =>
+    repository.selectRelease(projectId, releaseId),
+  );
+  handle("releases:update", (id: string, name: string, url: string) =>
+    repository.updateRelease(id, name, url),
+  );
   handle("projects:state", () => repository.state());
   handle("projects:select", (id: string) => repository.select(id));
   handle("projects:create", async (name: string) => {
@@ -60,13 +70,15 @@ export function registerProjectIpc(
       repository.saveConnection(id, connection),
   );
   handle("projects:confirm-memory", (id: string, captureId: string) =>
-    confirmPageMemory(repository.get(id).workspace, captureId),
+    confirmPageMemory(repository.shared(id).workspace, captureId),
   );
   handle("projects:page-memory", (id: string, query: string) =>
-    searchPageMemory(repository.get(id).workspace, query),
+    searchPageMemory(repository.shared(id).workspace, query),
   );
-  handle("projects:memory", (id: string) => repository.readMemory(id));
+  handle("projects:memory", (id: string) =>
+    repository.readMemory(repository.shared(id).id),
+  );
   handle("projects:reveal", (id: string) => {
-    shell.showItemInFolder(repository.get(id).workspace);
+    shell.showItemInFolder(repository.shared(id).workspace);
   });
 }

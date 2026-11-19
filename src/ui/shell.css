@@ -1034,3 +1034,53 @@ dialog::backdrop {
   border: 1px solid #dddcd1;
   border-radius: 8px;
 }
+
+.release-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  background: #272a2640;
+}
+.release-modal > form {
+  width: min(440px, 90vw);
+  padding: 28px;
+  border: 1px solid #ddd9ce;
+  border-radius: 16px;
+  box-shadow: 0 16px 60px #2222;
+}
+.release-modal label {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.release-settings .connection-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+}
+.release-copy {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 16px;
+  align-items: end;
+}
+.release-copy label {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.release-copy select {
+  width: 100%;
+  min-width: 0;
+}
+.release-copy > button {
+  justify-self: start;
+}
+@media (max-width: 1100px) {
+  .release-settings .connection-form,
+  .release-copy {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

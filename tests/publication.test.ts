@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { PublicationWorkflow } from "../src/workflows/publication.js";
 import type { PublicationReviews } from "../src/workflows/publication-review.js";
-import { ProjectRepository } from "../src/projects/repository.js";
+import { ProjectRepository } from "./fixtures/legacy-projects.js";
 import { openProjectDatabase } from "../src/projects/storage.js";
 import {
   FeishuClient,

@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { openProjectDatabase } from "../src/projects/storage.js";
-import { ProjectRepository } from "../src/projects/repository.js";
+import { ProjectRepository } from "./fixtures/legacy-projects.js";
 import { PrototypeRepository } from "../src/prototypes/repository.js";
 import { importSource } from "../src/projects/sources.js";
 import { ToolRegistry } from "../src/agent/tools.js";
@@ -215,8 +215,10 @@ test("restart requires manual reconciliation of uncertain external actions and n
     ],
   };
   f.db
-    .prepare("INSERT INTO task_runs VALUES(?,?,?,?)")
-    .run(runId, f.p.id, "running", run.createdAt);
+    .prepare(
+      "INSERT INTO task_runs(id,project_id,state,created_at,release_id) VALUES(?,?,?,?,?)",
+    )
+    .run(runId, f.p.id, "running", run.createdAt, f.p.id);
   f.db
     .prepare("INSERT INTO step_runs VALUES(?,?,?,?,?)")
     .run(randomUUID(), runId, "running", `workflows/${runId}-agent.json`, null);

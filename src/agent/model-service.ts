@@ -1,3 +1,4 @@
+import { owningProject } from "../projects/releases.js";
 import type { CapabilityReport, ModelCapability } from "../contracts/models.js";
 import { probeCapabilities } from "./model-client.js";
 import type { DatabaseSync } from "node:sqlite";
@@ -11,6 +12,7 @@ export class ModelService {
     private credentials: CredentialStore,
   ) {}
   private row(projectId: string) {
+    projectId = owningProject(this.db, projectId);
     if (
       typeof projectId !== "string" ||
       !this.db.prepare("SELECT id FROM projects WHERE id=?").get(projectId)
@@ -32,6 +34,7 @@ export class ModelService {
       : null;
   }
   async save(projectId: string, input: ModelInput): Promise<ModelProfile> {
+    projectId = owningProject(this.db, projectId);
     const old = this.row(projectId);
     if (
       !input ||
@@ -88,6 +91,7 @@ export class ModelService {
     return this.profile(projectId)!;
   }
   capabilities(projectId: string): CapabilityReport | null {
+    projectId = owningProject(this.db, projectId);
     this.row(projectId);
     const row = this.db
       .prepare("SELECT report_json FROM model_capabilities WHERE project_id=?")
@@ -95,6 +99,7 @@ export class ModelService {
     return row ? JSON.parse(String(row.report_json)) : null;
   }
   async probe(projectId: string, transport: typeof fetch = fetch) {
+    projectId = owningProject(this.db, projectId);
     const before = JSON.stringify(this.row(projectId));
     const report = await probeCapabilities(
       await this.request(projectId, "Test capabilities."),

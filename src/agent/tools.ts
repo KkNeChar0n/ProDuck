@@ -57,10 +57,10 @@ export class ToolRegistry {
       [],
       false,
       (c) => ({
-        documents: listSources(projects.get(c.projectId).workspace).map(
+        documents: listSources(projects.shared(c.projectId).workspace).map(
           (s) => ({ id: s.id, name: s.name }),
         ),
-        pages: captures(projects.get(c.projectId).workspace).map((p) => ({
+        pages: captures(projects.shared(c.projectId).workspace).map((p) => ({
           id: p.id,
           title: p.title,
           url: p.url,
@@ -74,7 +74,7 @@ export class ToolRegistry {
       ["sourceId"],
       false,
       (c, a) => {
-        const workspace = projects.get(c.projectId).workspace,
+        const workspace = projects.shared(c.projectId).workspace,
           source = listSources(workspace).find((s) => s.id === a.sourceId);
         if (!source) throw new Error("资料不属于当前项目");
         const path = projectPath(workspace, source.relativePath);
@@ -90,7 +90,7 @@ export class ToolRegistry {
       ["query"],
       false,
       (c, a) =>
-        searchPageMemory(projects.get(c.projectId).workspace, a.query).map(
+        searchPageMemory(projects.shared(c.projectId).workspace, a.query).map(
           (m) => ({
             id: m.id,
             title: m.title,
@@ -116,7 +116,7 @@ export class ToolRegistry {
       (c, a) => {
         const relative = `workflows/${c.runId}-${c.stepId}-note.md`;
         atomicWrite(
-          projectPath(projects.get(c.projectId).workspace, relative),
+          projectPath(projects.context(c.projectId).workspace, relative),
           a.content,
         );
         return { saved: relative };
@@ -203,7 +203,7 @@ export class ToolRegistry {
     expected?: { label: string; fingerprint: string },
   ) {
     const desc = this.validate(call);
-    this.projects.get(context.projectId);
+    this.projects.context(context.projectId);
     if (
       !/^[a-f0-9-]{36}$/i.test(context.runId) ||
       !/^[a-f0-9-]{36}$/i.test(context.stepId)

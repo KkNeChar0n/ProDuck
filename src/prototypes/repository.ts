@@ -20,10 +20,10 @@ export class PrototypeRepository {
     private projects: ProjectRepository,
   ) {}
   list(projectId: string): PrototypeVersion[] {
-    this.projects.get(projectId);
+    this.projects.context(projectId);
     return this.db
       .prepare(
-        `SELECT a.id,a.created_at AS createdAt,a.content_hash AS contentHash,a.baseline_id AS baselineId,a.source_refs_json AS sourceRefs,EXISTS(SELECT 1 FROM approvals p WHERE p.artifact_id=a.id AND p.content_hash=a.content_hash) AS approved FROM artifact_versions a WHERE a.project_id=? ORDER BY a.created_at DESC,a.rowid DESC`,
+        `SELECT a.id,a.created_at AS createdAt,a.content_hash AS contentHash,a.baseline_id AS baselineId,a.source_refs_json AS sourceRefs,EXISTS(SELECT 1 FROM approvals p WHERE p.artifact_id=a.id AND p.content_hash=a.content_hash) AS approved FROM artifact_versions a WHERE a.release_id=? ORDER BY a.created_at DESC,a.rowid DESC`,
       )
       .all(projectId)
       .map(
@@ -36,10 +36,10 @@ export class PrototypeRepository {
       );
   }
   read(projectId: string, id: string): string {
-    const project = this.projects.get(projectId),
+    const project = this.projects.context(projectId),
       row = this.db
         .prepare(
-          "SELECT relative_path,content_hash FROM artifact_versions WHERE project_id=? AND id=?",
+          "SELECT relative_path,content_hash FROM artifact_versions WHERE release_id=? AND id=?",
         )
         .get(projectId, id);
     if (!row) throw new Error("该原型不属于当前项目");
@@ -58,7 +58,7 @@ export class PrototypeRepository {
     baselineId: string | null = null,
     details?: PrototypeDetails,
   ): PrototypeVersion {
-    const project = this.projects.get(projectId);
+    const project = this.projects.context(projectId);
     if (baselineId) this.read(projectId, baselineId);
     if (
       !/<html[\s>]/i.test(html) ||
@@ -77,15 +77,18 @@ export class PrototypeRepository {
         JSON.stringify({ ...details, contentHash }, null, 2),
       );
     this.db
-      .prepare("INSERT INTO artifact_versions VALUES(?,?,?,?,?,?,?)")
+      .prepare(
+        "INSERT INTO artifact_versions(id,project_id,baseline_id,relative_path,content_hash,source_refs_json,created_at,release_id) VALUES(?,?,?,?,?,?,?,?)",
+      )
       .run(
         id,
-        projectId,
+        this.projects.shared(projectId).id,
         baselineId,
         relativePath,
         contentHash,
         JSON.stringify(sourceRefs),
         createdAt,
+        projectId,
       );
     return {
       id,
@@ -99,7 +102,7 @@ export class PrototypeRepository {
   details(projectId: string, id: string): PrototypeDetails | null {
     const html = this.read(projectId, id),
       path = projectPath(
-        this.projects.get(projectId).workspace,
+        this.projects.context(projectId).workspace,
         `prototypes/${id}.json`,
       );
     if (!existsSync(path)) return null;
@@ -111,7 +114,7 @@ export class PrototypeRepository {
   checks(projectId: string, id: string): PrototypeCheck[] {
     const html = this.read(projectId, id),
       path = projectPath(
-        this.projects.get(projectId).workspace,
+        this.projects.context(projectId).workspace,
         `prototypes/${id}-checks.json`,
       );
     if (!existsSync(path)) return [];
@@ -148,7 +151,7 @@ export class PrototypeRepository {
       ];
     atomicWrite(
       projectPath(
-        this.projects.get(projectId).workspace,
+        this.projects.context(projectId).workspace,
         `prototypes/${id}-checks.json`,
       ),
       JSON.stringify(records, null, 2),

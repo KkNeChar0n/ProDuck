@@ -68,7 +68,9 @@ export function PlatformSettings({
     try {
       const result = await desktop().platforms.test(projectId, provider);
       setNotice(
-        `读取成功：${result.title}（${result.targetId}）。已验证读取权限，尚未验证发布权限或状态映射。`,
+        provider === "feishu" && !profile?.url
+          ? "飞书应用鉴权成功。请在版本设置填写迭代地址并测试节点读取权限。"
+          : `读取成功：${result.title}（${result.targetId}）。已验证读取权限，尚未验证发布权限或状态映射。`,
       );
     } catch (e) {
       setError(errorText(e));
@@ -92,20 +94,18 @@ export function PlatformSettings({
             disabled={busy}
             style={{ border: 0, padding: 0, width: "100%" }}
           >
-            <label>
-              {provider === "feishu" ? "迭代父节点地址" : "项目地址"}
-              <input
-                name="url"
-                type="url"
-                required
-                defaultValue={profile?.url ?? ""}
-                placeholder={
-                  provider === "feishu"
-                    ? "https://团队.feishu.cn/wiki/…"
-                    : "https://devops.aliyun.com/…"
-                }
-              />
-            </label>
+            {provider === "yunxiao" && (
+              <label>
+                项目地址
+                <input
+                  name="url"
+                  type="url"
+                  required
+                  defaultValue={profile?.url ?? ""}
+                  placeholder="https://devops.aliyun.com/…"
+                />
+              </label>
+            )}
             {provider === "feishu" ? (
               <label>
                 App ID
@@ -186,7 +186,7 @@ export function PlatformSettings({
       )}
       {provider === "feishu" && (
         <p className="muted">
-          自建应用需有知识库读取权限及目标节点访问权限。测试仅申请访问令牌并读取父节点，不创建文档。
+          应用凭证由项目共享。迭代父节点地址请在版本设置填写；测试不会创建文档。
         </p>
       )}
       {error && (

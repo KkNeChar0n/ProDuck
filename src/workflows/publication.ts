@@ -22,7 +22,7 @@ export class PublicationWorkflow {
   ) {}
   private path(id: string) {
     return projectPath(
-      this.projects.get(id).workspace,
+      this.projects.context(id).workspace,
       "workflows/publications.json",
     );
   }
@@ -131,7 +131,7 @@ export class PublicationWorkflow {
       const assets = review.files.map((file) => ({
         ...file,
         bytes: readFileSync(
-          projectPath(this.projects.get(id).workspace, file.path),
+          projectPath(this.projects.context(id).workspace, file.path),
         ),
       }));
       if (assets.some((f) => f.bytes.length > 20 * 1024 * 1024))

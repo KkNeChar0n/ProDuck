@@ -197,6 +197,21 @@ contextBridge.exposeInMainWorld(
           ipcRenderer.removeListener("prototypes:progress", listener);
       },
     },
+    releases: {
+      create: (id: string, name: string) =>
+        ipcRenderer.invoke("releases:create", id, name),
+      select: (id: string, releaseId: string) =>
+        ipcRenderer.invoke("releases:select", id, releaseId),
+      update: (id: string, name: string, url: string) =>
+        ipcRenderer.invoke("releases:update", id, name, url),
+      copyPrototype: (target: string, source: string, artifactId: string) =>
+        ipcRenderer.invoke(
+          "releases:copy-prototype",
+          target,
+          source,
+          artifactId,
+        ),
+    },
     projects: {
       sources: (id: string) => ipcRenderer.invoke("projects:sources", id),
       importSource: (id: string) =>

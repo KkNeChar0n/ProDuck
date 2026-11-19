@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openProjectDatabase } from "../src/projects/storage.js";
-import { ProjectRepository } from "../src/projects/repository.js";
+import { ProjectRepository } from "./fixtures/legacy-projects.js";
 import { SkillRepository } from "../src/skills/repository.js";
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), "produck-skills-")),

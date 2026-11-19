@@ -51,13 +51,13 @@ export function registerWorkbenchIpc(
     projects,
     versions,
     {
-      context: (id) => browser.context(id),
-      open: (id, url) => browser.open(id, url),
+      context: (id) => browser.context(projects.shared(id).id),
+      open: (id, url) => browser.open(projects.shared(id).id, url),
       action: (id, action, selector, value) =>
-        browser.action(id, action, selector, value),
+        browser.action(projects.shared(id).id, action, selector, value),
       capture: async (id) => {
-        const { png, ...value } = await browser.capture(id);
-        return saveCapture(projects.get(id).workspace, value, png);
+        const { png, ...value } = await browser.capture(projects.shared(id).id);
+        return saveCapture(projects.shared(id).workspace, value, png);
       },
     },
     productTools(versions, generator, documents),
@@ -236,19 +236,19 @@ export function registerWorkbenchIpc(
       e.senderFrame !== win.webContents.mainFrame
     )
       throw new Error("Untrusted caller");
-    if (id) projects.get(id);
+    if (id) projects.context(id);
   }
   const notify = (e: IpcMainInvokeEvent) => (event: GenerationProgress) => {
     if (!e.sender.isDestroyed()) e.sender.send("prototypes:progress", event);
   };
   ipcMain.handle("browser:open", (e, id: string, url: string) => {
     trusted(e, id);
-    return browser.open(id, url);
+    return browser.open(projects.shared(id).id, url);
   });
   ipcMain.handle("browser:show", (e, id: string, bounds: SurfaceBounds) => {
     trusted(e, id);
     preview.hide();
-    browser.show(id, bounds);
+    browser.show(projects.shared(id).id, bounds);
   });
   ipcMain.handle("surface:hide", (e) => {
     trusted(e);
@@ -257,16 +257,16 @@ export function registerWorkbenchIpc(
   });
   ipcMain.handle("browser:capture", async (e, id: string) => {
     trusted(e, id);
-    const { png, ...value } = await browser.capture(id);
-    return saveCapture(projects.get(id).workspace, value, png);
+    const { png, ...value } = await browser.capture(projects.shared(id).id);
+    return saveCapture(projects.shared(id).workspace, value, png);
   });
   ipcMain.handle("browser:captures", (e, id: string) => {
     trusted(e, id);
-    return captures(projects.get(id).workspace);
+    return captures(projects.shared(id).workspace);
   });
   ipcMain.handle("browser:reveal", (e, id: string, captureId: string) => {
     trusted(e, id);
-    const project = projects.get(id),
+    const project = projects.shared(id),
       capture = getCapture(project.workspace, captureId);
     shell.showItemInFolder(
       projectPath(project.workspace, capture.relativePath),
@@ -283,7 +283,24 @@ export function registerWorkbenchIpc(
     ) => {
       trusted(e, id);
       if (!["click", "fill"].includes(action)) throw new Error("不支持的操作");
-      return browser.action(id, action, selector, value);
+      return browser.action(projects.shared(id).id, action, selector, value);
+    },
+  );
+  ipcMain.handle(
+    "releases:copy-prototype",
+    (e, target: string, source: string, artifactId: string) => {
+      trusted(e, target);
+      if (projects.shared(target).id !== projects.shared(source).id)
+        throw new Error("只能从同项目复制原型");
+      const original = versions.list(source).find((v) => v.id === artifactId);
+      if (!original) throw new Error("原型不存在");
+      return versions.create(
+        target,
+        versions.read(source, artifactId),
+        original.sourceRefs,
+        null,
+        versions.details(source, artifactId) ?? undefined,
+      );
     },
   );
   ipcMain.handle("prototypes:list", (e, id: string) => {

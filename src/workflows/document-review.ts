@@ -153,12 +153,12 @@ export class DocumentReviews {
     private connect: (id: string) => Promise<FeishuPort>,
   ) {}
   private read<T>(id: string, path: string, fallback: T): T {
-    const file = projectPath(this.projects.get(id).workspace, path);
+    const file = projectPath(this.projects.context(id).workspace, path);
     return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : fallback;
   }
   private write(id: string, path: string, value: unknown) {
     atomicWrite(
-      projectPath(this.projects.get(id).workspace, path),
+      projectPath(this.projects.context(id).workspace, path),
       JSON.stringify(value, null, 2),
     );
   }

@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createServer } from "node:net";
 import { openProjectDatabase } from "../src/projects/storage.js";
-import { ProjectRepository } from "../src/projects/repository.js";
+import { ProjectRepository } from "./fixtures/legacy-projects.js";
 import { SkillRepository } from "../src/skills/repository.js";
 import { parsePythonManifest } from "../src/skills/python-manifest.js";
 import { PythonRunner } from "../src/skills/python-runner.js";

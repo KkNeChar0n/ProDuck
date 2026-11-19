@@ -75,7 +75,7 @@ export class PythonRunner {
     const runtime = realpathSync(this.runtime),
       runId = randomUUID(),
       relativePath = `workflows/python-${runId}`,
-      root = projectPath(this.projects.get(id).workspace, relativePath),
+      root = projectPath(this.projects.context(id).workspace, relativePath),
       skill = join(root, "skill"),
       output = join(root, "output");
     mkdirSync(output, { recursive: true });

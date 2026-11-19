@@ -14,12 +14,12 @@ export class DocumentWorkflow {
     private models: ModelService,
   ) {}
   private read<T>(id: string, path: string, fallback: T): T {
-    const full = projectPath(this.projects.get(id).workspace, path);
+    const full = projectPath(this.projects.context(id).workspace, path);
     return existsSync(full) ? JSON.parse(readFileSync(full, "utf8")) : fallback;
   }
   private write(id: string, path: string, value: unknown) {
     atomicWrite(
-      projectPath(this.projects.get(id).workspace, path),
+      projectPath(this.projects.context(id).workspace, path),
       JSON.stringify(value, null, 2),
     );
   }
@@ -54,7 +54,7 @@ export class DocumentWorkflow {
     };
     state.screenshotPath = `documents/${state.id}.png`;
     atomicWrite(
-      projectPath(this.projects.get(id).workspace, state.screenshotPath),
+      projectPath(this.projects.context(id).workspace, state.screenshotPath),
       png,
     );
     this.write(id, "documents/states.json", [...this.states(id), state]);
@@ -122,7 +122,7 @@ export class DocumentWorkflow {
       };
       atomicWrite(
         projectPath(
-          this.projects.get(id).workspace,
+          this.projects.context(id).workspace,
           `documents/${draft.id}.md`,
         ),
         markdown +
@@ -157,7 +157,10 @@ export class DocumentWorkflow {
         dataUrl:
           "data:image/png;base64," +
           readFileSync(
-            projectPath(this.projects.get(id).workspace, state.screenshotPath),
+            projectPath(
+              this.projects.context(id).workspace,
+              state.screenshotPath,
+            ),
           ).toString("base64"),
       };
     });
@@ -174,7 +177,7 @@ export class DocumentWorkflow {
     const states = draft.stateIds.map((s) =>
       this.states(id).find((state) => state.id === s)!,
     );
-    return `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>Produck PRD 草稿</title><style>body{max-width:1000px;margin:40px auto;padding:24px;font:16px/1.7 system-ui;color:#29372d;background:#faf9f4}pre{white-space:pre-wrap;font:inherit}img{max-width:100%;border:1px solid #ddd}</style><h1>PRD 草稿</h1><p>批准原型：${esc(draft.versionId)} · ${esc(draft.contentHash)}</p><pre>${esc(draft.markdown)}</pre>${states.map((s) => `<h2>${esc(s.label)}</h2><img alt="${esc(s.label)}" src="data:image/png;base64,${readFileSync(projectPath(this.projects.get(id).workspace, s.screenshotPath)).toString("base64")}">`).join("")}</html>`;
+    return `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>Produck PRD 草稿</title><style>body{max-width:1000px;margin:40px auto;padding:24px;font:16px/1.7 system-ui;color:#29372d;background:#faf9f4}pre{white-space:pre-wrap;font:inherit}img{max-width:100%;border:1px solid #ddd}</style><h1>PRD 草稿</h1><p>批准原型：${esc(draft.versionId)} · ${esc(draft.contentHash)}</p><pre>${esc(draft.markdown)}</pre>${states.map((s) => `<h2>${esc(s.label)}</h2><img alt="${esc(s.label)}" src="data:image/png;base64,${readFileSync(projectPath(this.projects.context(id).workspace, s.screenshotPath)).toString("base64")}">`).join("")}</html>`;
   }
   cancel(id: string) {
     this.active.get(id)?.abort();

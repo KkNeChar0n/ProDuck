@@ -42,7 +42,26 @@ export interface DesktopInfo {
   version: string;
   platform: string;
 }
+/** Execution APIs (workbench/documents/agent/publication/reviews/sync/Python)
+ * take a fixed product release ID. Configuration APIs resolve its owning project;
+ * projects.select/create and releases.create always take the real project ID.
+ * Legacy DTO projectId fields carry this execution scope for migrated receipts.
+ */
 export interface DesktopBridge {
+  releases: {
+    create(projectId: string, name: string): Promise<WorkspaceState>;
+    select(projectId: string, releaseId: string): Promise<WorkspaceState>;
+    update(
+      id: string,
+      name: string,
+      url: string,
+    ): Promise<import("./projects.js").ProductRelease>;
+    copyPrototype(
+      target: string,
+      source: string,
+      artifactId: string,
+    ): Promise<PrototypeVersion>;
+  };
   yunxiaoSync: {
     list(id: string): Promise<YunxiaoSync[]>;
     prepare(

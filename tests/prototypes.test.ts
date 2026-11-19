@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { openProjectDatabase } from "../src/projects/storage.js";
-import { ProjectRepository } from "../src/projects/repository.js";
+import { ProjectRepository } from "./fixtures/legacy-projects.js";
 import { PrototypeRepository } from "../src/prototypes/repository.js";
 import { saveCapture, captures, getCapture } from "../src/projects/captures.js";
 import {

@@ -11,4 +11,15 @@ export interface ProjectConnection {
 export interface WorkspaceState {
   projects: Project[];
   activeProjectId: string | null;
+  releases: ProductRelease[];
+  activeReleaseId: string | null;
+}
+
+export interface ProductRelease {
+  id: string;
+  projectId: string;
+  name: string;
+  relativePath: string;
+  feishuUrl: string;
+  createdAt: string;
 }

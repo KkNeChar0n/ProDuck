@@ -5,7 +5,7 @@ import {
   openProjectDatabase,
   atomicWrite,
 } from "../../src/projects/storage.js";
-import { ProjectRepository } from "../../src/projects/repository.js";
+import { ProjectRepository } from "./legacy-projects.js";
 import { PrototypeRepository } from "../../src/prototypes/repository.js";
 import { saveCapture } from "../../src/projects/captures.js";
 import { DocumentWorkflow } from "../../src/workflows/documents.js";
@@ -73,11 +73,12 @@ atomicWrite(
     change: "新增筛选",
   }),
 );
-db.prepare("INSERT INTO task_runs VALUES(?,?,?,?)").run(
+db.prepare("INSERT INTO task_runs(id,project_id,state,created_at,release_id) VALUES(?,?,?,?,?)").run(
   runId,
   p.id,
   "running",
   new Date().toISOString(),
+  p.id,
 );
 db.prepare("INSERT INTO step_runs VALUES(?,?,?,?,?)").run(
   randomUUID(),

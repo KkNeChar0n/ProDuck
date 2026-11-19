@@ -1,3 +1,5 @@
+import { owningProject, releaseUrl } from "./releases.js";
+import type { ProductRelease } from "../contracts/projects.js";
 import type { DatabaseSync } from "node:sqlite";
 import {
   mkdirSync,
@@ -33,19 +35,109 @@ export class ProjectRepository {
     if (!row) throw new Error("项目不存在");
     return row as unknown as Project;
   }
+  releases(projectId: string): ProductRelease[] {
+    this.get(projectId);
+    return this.db
+      .prepare(
+        "SELECT id,project_id AS projectId,name,relative_path AS relativePath,feishu_url AS feishuUrl,created_at AS createdAt FROM releases WHERE project_id=? ORDER BY created_at,rowid",
+      )
+      .all(projectId) as unknown as ProductRelease[];
+  }
+  release(id: string): ProductRelease {
+    const row = this.db
+      .prepare("SELECT project_id FROM releases WHERE id=?")
+      .get(id);
+    if (!row) throw new Error("请先创建并选择产品版本");
+    return this.releases(String(row.project_id)).find((r) => r.id === id)!;
+  }
+  shared(id: string): Project {
+    return this.get(owningProject(this.db, id));
+  }
+  context(id: string): Project {
+    const release = this.release(id),
+      project = this.get(release.projectId);
+    return {
+      ...project,
+      id: release.id,
+      name: `${project.name} / ${release.name}`,
+      workspace: projectPath(project.workspace, release.relativePath),
+    };
+  }
+  createRelease(projectId: string, name: string): ProductRelease {
+    const project = this.get(projectId);
+    if (typeof name !== "string" || !name.trim() || name.trim().length > 80)
+      throw new Error("版本名称需要 1–80 个字符");
+    if (this.releases(projectId).some((r) => r.name === name.trim()))
+      throw new Error("版本名称已存在");
+    const id = randomUUID(),
+      relativePath = `releases/${id}`;
+    const workspace = projectPath(project.workspace, relativePath);
+    mkdirSync(workspace, { recursive: true, mode: 0o700 });
+    try {
+      for (const folder of ["prototypes", "documents", "workflows"])
+        mkdirSync(join(workspace, folder));
+      this.db
+        .prepare("INSERT INTO releases VALUES(?,?,?,?,?,?)")
+        .run(
+          id,
+          projectId,
+          name.trim(),
+          relativePath,
+          "",
+          new Date().toISOString(),
+        );
+    } catch (e) {
+      rmSync(workspace, { recursive: true, force: true });
+      throw e;
+    }
+    return this.release(id);
+  }
+  updateRelease(id: string, name: string, url: string): ProductRelease {
+    this.release(id);
+    if (
+      typeof name !== "string" ||
+      !name.trim() ||
+      name.trim().length > 80 ||
+      typeof url !== "string"
+    )
+      throw new Error("版本配置无效");
+    this.db
+      .prepare("UPDATE releases SET name=?,feishu_url=? WHERE id=?")
+      .run(name.trim(), releaseUrl(url), id);
+    return this.release(id);
+  }
   state(): WorkspaceState {
     const projects = this.list();
-    let activeProjectId = projects[0]?.id ?? null;
+    let saved: { activeProjectId?: string; activeReleaseId?: string } = {};
     try {
-      const value = JSON.parse(readFileSync(this.statePath, "utf8"));
-      if (projects.some((p) => p.id === value.activeProjectId))
-        activeProjectId = value.activeProjectId;
+      saved = JSON.parse(readFileSync(this.statePath, "utf8"));
     } catch {}
-    return { projects, activeProjectId };
+    const activeProjectId =
+      projects.find((p) => p.id === saved.activeProjectId)?.id ??
+      projects[0]?.id ??
+      null;
+    const releases = activeProjectId ? this.releases(activeProjectId) : [];
+    const activeReleaseId =
+      releases.find((r) => r.id === saved.activeReleaseId)?.id ??
+      releases[0]?.id ??
+      null;
+    return { projects, activeProjectId, releases, activeReleaseId };
   }
   select(id: string): WorkspaceState {
     this.get(id);
     atomicWrite(this.statePath, JSON.stringify({ activeProjectId: id }));
+    return this.state();
+  }
+  selectRelease(projectId: string, releaseId: string): WorkspaceState {
+    if (this.release(releaseId).projectId !== projectId)
+      throw new Error("版本不属于当前项目");
+    atomicWrite(
+      this.statePath,
+      JSON.stringify({
+        activeProjectId: projectId,
+        activeReleaseId: releaseId,
+      }),
+    );
     return this.state();
   }
   create(name: string, parent: string): Project {

@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openProjectDatabase } from "../src/projects/storage.js";
-import { ProjectRepository } from "../src/projects/repository.js";
+import { ProjectRepository } from "./fixtures/legacy-projects.js";
 import { YunxiaoSyncWorkflow } from "../src/workflows/yunxiao-sync.js";
 import { YunxiaoClient } from "../src/integrations/yunxiao.js";
 import type { PublicationRun } from "../src/contracts/publication.js";

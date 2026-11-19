@@ -16,7 +16,7 @@ import {
   migrations,
   discardInterruptedWrites,
 } from "../src/projects/storage.js";
-import { ProjectRepository } from "../src/projects/repository.js";
+import { ProjectRepository } from "./fixtures/legacy-projects.js";
 import { PrototypeRepository } from "../src/prototypes/repository.js";
 import { PrototypeGenerator } from "../src/agent/prototype-generator.js";
 import { DocumentWorkflow } from "../src/workflows/documents.js";

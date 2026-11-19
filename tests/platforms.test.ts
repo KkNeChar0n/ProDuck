@@ -30,6 +30,9 @@ function fixture(transport: typeof fetch) {
       "/" + id,
       "now",
     );
+  db.exec(
+    "INSERT INTO releases SELECT id,id,'默认版本','','',created_at FROM projects",
+  );
   const secrets = new Map<string, string>();
   const service = new PlatformService(
     db,

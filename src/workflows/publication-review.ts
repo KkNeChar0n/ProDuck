@@ -18,7 +18,7 @@ export class PublicationReviews {
     private platforms: Pick<PlatformService, "profile" | "test">,
   ) {}
   private path(id: string, name: string) {
-    return projectPath(this.projects.get(id).workspace, name);
+    return projectPath(this.projects.context(id).workspace, name);
   }
   list(id: string): PublicationReview[] {
     const path = this.path(id, "documents/publication-reviews.json");
@@ -85,8 +85,8 @@ export class PublicationReviews {
   }
   private async parent(id: string) {
     const before = this.platforms.profile(id, "feishu");
-    if (!before?.hasCredential || !before.appId)
-      throw new Error("请先在项目设置配置飞书应用和迭代父节点");
+    if (!before?.hasCredential || !before.appId || !before.url)
+      throw new Error("请先在项目设置配置飞书应用，并在版本设置填写迭代父节点");
     const target = await this.platforms.test(id, "feishu");
     const after = this.platforms.profile(id, "feishu");
     if (JSON.stringify(before) !== JSON.stringify(after))

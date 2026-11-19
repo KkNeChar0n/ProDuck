@@ -72,10 +72,10 @@ export class PrototypeGenerator {
       .run();
   }
   tasks(projectId: string) {
-    const project = this.projects.get(projectId);
+    const project = this.projects.context(projectId);
     return this.db
       .prepare(
-        `SELECT t.id,t.state,t.created_at AS createdAt,s.output_ref AS outputId,s.input_ref AS inputRef FROM task_runs t JOIN step_runs s ON s.run_id=t.id WHERE t.project_id=? AND s.input_ref NOT LIKE '%-agent.json' ORDER BY t.created_at DESC LIMIT 50`,
+        `SELECT t.id,t.state,t.created_at AS createdAt,s.output_ref AS outputId,s.input_ref AS inputRef FROM task_runs t JOIN step_runs s ON s.run_id=t.id WHERE t.release_id=? AND s.input_ref NOT LIKE '%-agent.json' ORDER BY t.created_at DESC LIMIT 50`,
       )
       .all(projectId)
       .map((row) => ({
@@ -99,7 +99,7 @@ export class PrototypeGenerator {
     const checkpoint = JSON.parse(
       readFileSync(
         projectPath(
-          this.projects.get(projectId).workspace,
+          this.projects.context(projectId).workspace,
           `workflows/${runId}-prototype.json`,
         ),
         "utf8",
@@ -134,8 +134,11 @@ export class PrototypeGenerator {
   ) {
     if (parentSignal?.aborted) throw new Error("任务已取消");
     if (this.active.has(projectId)) throw new Error("当前项目已有原型生成任务");
-    const project = this.projects.get(projectId),
-      capture = getCapture(project.workspace, captureId),
+    const project = this.projects.context(projectId),
+      capture = getCapture(
+        this.projects.shared(projectId).workspace,
+        captureId,
+      ),
       baseline = baselineId
         ? this.prototypes.read(projectId, baselineId)
         : undefined;
@@ -159,8 +162,16 @@ export class PrototypeGenerator {
     parentSignal?.addEventListener("abort", abort, { once: true });
     if (parentSignal?.aborted) controller.abort();
     this.db
-      .prepare("INSERT INTO task_runs VALUES(?,?,?,?)")
-      .run(runId, projectId, "running", new Date().toISOString());
+      .prepare(
+        "INSERT INTO task_runs(id,project_id,state,created_at,release_id) VALUES(?,?,?,?,?)",
+      )
+      .run(
+        runId,
+        this.projects.shared(projectId).id,
+        "running",
+        new Date().toISOString(),
+        projectId,
+      );
     this.db
       .prepare("INSERT INTO step_runs VALUES(?,?,?,?,?)")
       .run(stepId, runId, "running", checkpointRef, null);

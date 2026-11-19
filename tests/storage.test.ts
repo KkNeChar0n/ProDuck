@@ -84,7 +84,9 @@ test("schema enforces project references and supports pending remote results", (
   const db = openProjectDatabase(join(fixture(), "projects.sqlite"));
   assert.throws(() =>
     db
-      .prepare("INSERT INTO task_runs VALUES(?,?,?,?)")
+      .prepare(
+        "INSERT INTO task_runs(id,project_id,state,created_at) VALUES(?,?,?,?)",
+      )
       .run("t", "missing", "running", "now"),
   );
   db.prepare("INSERT INTO projects VALUES(?,?,?,?)").run(
@@ -93,12 +95,9 @@ test("schema enforces project references and supports pending remote results", (
     "/fixture/a",
     "now",
   );
-  db.prepare("INSERT INTO task_runs VALUES(?,?,?,?)").run(
-    "t",
-    "p",
-    "running",
-    "now",
-  );
+  db.prepare(
+    "INSERT INTO task_runs(id,project_id,state,created_at) VALUES(?,?,?,?)",
+  ).run("t", "p", "running", "now");
   db.prepare("INSERT INTO step_runs VALUES(?,?,?,?,?)").run(
     "s",
     "t",

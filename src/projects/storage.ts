@@ -110,6 +110,17 @@ export const migrations: Migration[] = [
     version: 2,
     sql: "CREATE TABLE model_capabilities(project_id TEXT PRIMARY KEY REFERENCES projects(id), report_json TEXT NOT NULL);",
   },
+  {
+    version: 3,
+    sql: `
+CREATE TABLE releases(id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id), name TEXT NOT NULL, relative_path TEXT NOT NULL, feishu_url TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, UNIQUE(project_id,name));
+INSERT INTO releases SELECT p.id,p.id,'默认版本','',COALESCE((SELECT json_extract(config_json,'$.url') FROM connections WHERE project_id=p.id AND provider='feishu'),''),p.created_at FROM projects p;
+ALTER TABLE artifact_versions ADD COLUMN release_id TEXT REFERENCES releases(id);
+UPDATE artifact_versions SET release_id=project_id;
+ALTER TABLE task_runs ADD COLUMN release_id TEXT REFERENCES releases(id);
+UPDATE task_runs SET release_id=project_id;
+`,
+  },
 ];
 
 export function openProjectDatabase(

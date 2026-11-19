@@ -1,3 +1,4 @@
+import { owningProject } from "../projects/releases.js";
 import type { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import type { CredentialStore } from "./credentials.js";
@@ -17,6 +18,12 @@ function identifier(value: unknown, label: string): string {
 function validate(input: PlatformInput): PlatformConfig {
   if (!input || !["feishu", "yunxiao"].includes(input.provider))
     throw new Error("平台配置无效");
+  if (input.provider === "feishu" && !input.url)
+    return {
+      provider: "feishu",
+      url: "",
+      appId: identifier(input.appId, "App ID"),
+    };
   let url: URL;
   try {
     url = new URL(input.url);
@@ -67,15 +74,30 @@ export class PlatformService {
     private transport: typeof fetch = fetch,
   ) {}
   private row(id: string, provider: Platform) {
+    const scopeId = id;
+    id = owningProject(this.db, id);
     if (
       typeof id !== "string" ||
       !this.db.prepare("SELECT id FROM projects WHERE id=?").get(id)
     )
       throw new Error("项目不存在");
     if (!["feishu", "yunxiao"].includes(provider)) throw new Error("平台无效");
-    return this.db
+    const row = this.db
       .prepare("SELECT * FROM connections WHERE project_id=? AND provider=?")
       .get(id, provider);
+    if (row && provider === "feishu") {
+      const release = this.db
+        .prepare("SELECT feishu_url FROM releases WHERE id=?")
+        .get(scopeId);
+      return {
+        ...row,
+        config_json: JSON.stringify({
+          ...JSON.parse(String(row.config_json)),
+          url: release ? String(release.feishu_url) : "",
+        }),
+      };
+    }
+    return row;
   }
   profile(id: string, provider: Platform): PlatformProfile | null {
     const row = this.row(id, provider);
@@ -117,9 +139,11 @@ export class PlatformService {
         )
         .run(
           randomUUID(),
-          id,
+          owningProject(this.db, id),
           config.provider,
-          JSON.stringify(config),
+          JSON.stringify(
+            config.provider === "feishu" ? { ...config, url: "" } : config,
+          ),
           reference,
         );
     } catch (error) {
@@ -128,6 +152,10 @@ export class PlatformService {
     }
     if (input.secret && old?.credential_ref)
       await this.credentials.delete(String(old.credential_ref)).catch(() => {});
+    if (config.provider === "feishu" && config.url)
+      this.db
+        .prepare("UPDATE releases SET feishu_url=? WHERE id=?")
+        .run(config.url, id);
     return this.profile(id, config.provider)!;
   }
   private async request(url: string, init: RequestInit = {}): Promise<any> {
@@ -225,6 +253,16 @@ export class PlatformService {
         throw new Error(
           "飞书应用鉴权失败，请检查 App ID、App Secret 与应用状态",
         );
+      if (!config.url) {
+        if (JSON.stringify(this.row(id, provider)) !== JSON.stringify(row))
+          throw new Error("测试期间配置发生变化");
+        return {
+          checkedAt: new Date().toISOString(),
+          targetId: config.appId!,
+          title: "飞书应用鉴权成功；请在版本设置填写迭代地址",
+          scope: "read-only",
+        };
+      }
       const nodeToken = new URL(config.url).pathname.split("/")[2];
       const result = await this.request(
         `https://open.feishu.cn/open-apis/wiki/v2/spaces/get_node?token=${encodeURIComponent(nodeToken)}`,

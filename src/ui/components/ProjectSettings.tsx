@@ -31,7 +31,7 @@ export function ProjectSettings({ project }: { project: Project }) {
         />
       ))}
       <p className="muted">
-        连接及凭证按项目隔离。飞书首次发布在文档页操作；飞书发布成功后可按配置同步云效状态。
+        模型、工作空间及平台凭证由项目共享。飞书迭代地址在版本设置中填写；原型、文档与交付记录按版本独立保存。
       </p>
       {error && (
         <p role="alert" className="error">

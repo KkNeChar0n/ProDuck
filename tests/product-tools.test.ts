@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { openProjectDatabase } from "../src/projects/storage.js";
-import { ProjectRepository } from "../src/projects/repository.js";
+import { ProjectRepository } from "./fixtures/legacy-projects.js";
 import { PrototypeRepository } from "../src/prototypes/repository.js";
 import { DocumentWorkflow } from "../src/workflows/documents.js";
 import { ToolRegistry } from "../src/agent/tools.js";

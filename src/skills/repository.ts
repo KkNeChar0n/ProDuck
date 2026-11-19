@@ -32,7 +32,7 @@ export class SkillRepository {
   constructor(private projects: ProjectRepository) {}
   list(id: string): ImportedSkill[] {
     const path = projectPath(
-      this.projects.get(id).workspace,
+      this.projects.shared(id).workspace,
       "skills/index.json",
     );
     return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : [];
@@ -41,7 +41,7 @@ export class SkillRepository {
     return [...this.list(id), ...builtinSkillRecords()];
   }
   import(id: string, source: string): ImportedSkill {
-    const project = this.projects.get(id),
+    const project = this.projects.shared(id),
       root = resolve(source),
       files = new Map<string, Buffer>();
     let bytes = 0;
@@ -208,7 +208,7 @@ export class SkillRepository {
       record.fingerprint !== fingerprint
     )
       throw new Error("Python 技能未就绪或版本已变化，请重新导入");
-    const workspace = this.projects.get(id).workspace;
+    const workspace = this.projects.shared(id).workspace;
     const files = new Map(
       record.resources.map((path) => [
         path,
@@ -231,7 +231,7 @@ export class SkillRepository {
     return hash.digest("hex");
   }
   instructions(id: string, skillId: string) {
-    this.projects.get(id);
+    this.projects.shared(id);
     const builtin = agentBuiltins.find((s) => s.id === skillId);
     if (builtin)
       return {
@@ -244,7 +244,7 @@ export class SkillRepository {
     if (record.python) throw new Error("Python 技能请在 Skills 页独立授权运行");
     if (record.status === "unsupported")
       throw new Error("技能存在未适配依赖，请先查看兼容性报告");
-    const workspace = this.projects.get(id).workspace,
+    const workspace = this.projects.shared(id).workspace,
       files = new Map(
         record.resources.map((path) => [
           path,

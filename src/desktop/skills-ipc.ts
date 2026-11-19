@@ -34,7 +34,7 @@ export function registerSkillsIpc(
   app.on("before-quit", () => python.close());
   ipcMain.handle("skills:python-cancel", (e, id: string) => {
     trusted(e);
-    projects.get(id);
+    projects.context(id);
     python.cancel(id);
   });
   ipcMain.handle(
@@ -68,7 +68,7 @@ export function registerSkillsIpc(
     if (!/^[a-f0-9-]{36}$/.test(runId)) throw new Error("运行记录无效");
     shell.showItemInFolder(
       projectPath(
-        projects.get(id).workspace,
+        projects.context(id).workspace,
         `workflows/python-${runId}/result.json`,
       ),
     );

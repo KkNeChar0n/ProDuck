@@ -59,15 +59,15 @@ export class AgentRunner {
   private path(id: string, runId: string) {
     if (!/^[a-f0-9-]{36}$/i.test(runId)) throw new Error("任务标识无效");
     return projectPath(
-      this.projects.get(id).workspace,
+      this.projects.context(id).workspace,
       `workflows/${runId}-agent.json`,
     );
   }
   list(id: string): AgentRun[] {
-    this.projects.get(id);
+    this.projects.context(id);
     return this.db
       .prepare(
-        "SELECT DISTINCT t.id FROM task_runs t JOIN step_runs s ON s.run_id=t.id WHERE t.project_id=? AND s.input_ref LIKE '%-agent.json' ORDER BY t.created_at DESC LIMIT 30",
+        "SELECT DISTINCT t.id FROM task_runs t JOIN step_runs s ON s.run_id=t.id WHERE t.release_id=? AND s.input_ref LIKE '%-agent.json' ORDER BY t.created_at DESC LIMIT 30",
       )
       .all(id)
       .map((row) => {
@@ -96,7 +96,7 @@ export class AgentRunner {
     this.notify(structuredClone(run));
   }
   start(id: string, goal: string, budget: number, skillId?: string) {
-    this.projects.get(id);
+    this.projects.context(id);
     if (this.active.has(id)) throw new Error("当前项目已有 Agent 任务");
     if (
       typeof goal !== "string" ||
@@ -123,8 +123,10 @@ export class AgentRunner {
       createdAt: new Date().toISOString(),
     };
     this.db
-      .prepare("INSERT INTO task_runs VALUES(?,?,?,?)")
-      .run(run.id, id, run.state, run.createdAt);
+      .prepare(
+        "INSERT INTO task_runs(id,project_id,state,created_at,release_id) VALUES(?,?,?,?,?)",
+      )
+      .run(run.id, this.projects.shared(id).id, run.state, run.createdAt, id);
     this.db
       .prepare("INSERT INTO step_runs VALUES(?,?,?,?,?)")
       .run(

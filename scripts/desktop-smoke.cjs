@@ -177,6 +177,15 @@ const wait = async (w, expression) => {
   let state = await wc.executeJavaScript("window.produck.projects.state()");
   assert.equal(state.projects.length, 1);
   const first = state.projects[0];
+  assert.equal(state.activeReleaseId, null);
+  const releaseState = await wc.executeJavaScript(
+    `window.produck.releases.create(${JSON.stringify(first.id)}, 'V1.0.0')`,
+  );
+  const firstRelease = releaseState.releases[0];
+  const releaseWorkspace = join(first.workspace, firstRelease.relativePath);
+  await wc.executeJavaScript(
+    `window.produck.releases.update(${JSON.stringify(firstRelease.id)}, 'V1.0.0', 'https://example.feishu.cn/wiki/fixture')`,
+  );
   await wc.executeJavaScript(
     `window.produck.projects.saveConnection(${JSON.stringify(first.id)},{provider:'feishu',url:'https://example.feishu.cn/wiki/fixture'})`,
   );
@@ -185,6 +194,10 @@ const wait = async (w, expression) => {
   );
   const second = state.projects.find((p) => p.id !== first.id);
   assert(second);
+  const secondState = await wc.executeJavaScript(
+    `window.produck.releases.create(${JSON.stringify(second.id)}, 'V1.0.0')`,
+  );
+  const secondRelease = secondState.releases[0];
   assert.notEqual(first.workspace, second.workspace);
   assert.equal(
     (
@@ -442,7 +455,7 @@ const wait = async (w, expression) => {
     `document.querySelector('[aria-label="原型版本"]')?.options.length===2`,
   );
   const versionList = await wc.executeJavaScript(
-    `window.produck.workbench.versions(${JSON.stringify(first.id)})`,
+    `window.produck.workbench.versions(${JSON.stringify(firstRelease.id)})`,
   );
   assert.equal(versionList[0].approved, false);
   assert.equal(versionList[1].approved, true);
@@ -479,7 +492,7 @@ const wait = async (w, expression) => {
   );
   await assert.rejects(
     wc.executeJavaScript(
-      `window.produck.documents.generate(${JSON.stringify(first.id)},${JSON.stringify(versionList[0].id)},['x'],'')`,
+      `window.produck.documents.generate(${JSON.stringify(firstRelease.id)},${JSON.stringify(versionList[0].id)},['x'],'')`,
     ),
     /先通过/,
   );
@@ -521,11 +534,11 @@ const wait = async (w, expression) => {
     filePath: join(root, "exported-prd.html"),
   });
   const drafts = await wc.executeJavaScript(
-    `window.produck.documents.list(${JSON.stringify(first.id)})`,
+    `window.produck.documents.list(${JSON.stringify(firstRelease.id)})`,
   );
   assert.equal(drafts[0].versionId, versionList[0].id);
   await wc.executeJavaScript(
-    `window.produck.documents.export(${JSON.stringify(first.id)},${JSON.stringify(drafts[0].id)})`,
+    `window.produck.documents.export(${JSON.stringify(firstRelease.id)},${JSON.stringify(drafts[0].id)})`,
   );
   assert.match(
     readFileSync(join(root, "exported-prd.html"), "utf8"),
@@ -539,7 +552,7 @@ const wait = async (w, expression) => {
     (await wc.capturePage()).toPNG(),
   );
   const tasks = await wc.executeJavaScript(
-    `window.produck.workbench.tasks(${JSON.stringify(first.id)})`,
+    `window.produck.workbench.tasks(${JSON.stringify(firstRelease.id)})`,
   );
   assert.equal(tasks.length, 2);
   assert(tasks.every((t) => t.state === "succeeded" && !t.recoverable));
@@ -630,7 +643,7 @@ const wait = async (w, expression) => {
     `document.body.innerText.includes('项目资料已整理，笔记已保存。')`,
   );
   const agentRuns = await wc.executeJavaScript(
-    `window.produck.agent.list(${JSON.stringify(first.id)})`,
+    `window.produck.agent.list(${JSON.stringify(firstRelease.id)})`,
   );
   assert.equal(agentRuns[0].state, "succeeded");
   assert.equal(agentRuns[0].steps.length, 2);
@@ -638,7 +651,7 @@ const wait = async (w, expression) => {
   assert.equal(agentRuns[0].skill.fingerprint, importedSkills[0].fingerprint);
   assert(
     require("node:fs")
-      .readdirSync(join(first.workspace, "workflows"))
+      .readdirSync(join(releaseWorkspace, "workflows"))
       .some((x) => x.endsWith("-note.md")),
   );
   await wc.executeJavaScript(
@@ -681,10 +694,7 @@ const wait = async (w, expression) => {
   await wc.executeJavaScript(
     `document.querySelector('input[name=appId]').form.querySelector('button[type=button]').click()`,
   );
-  await wait(
-    window,
-    `document.body.innerText.includes('读取成功：平台连接测试迭代')`,
-  );
+  await wait(window, `document.body.innerText.includes('飞书应用鉴权成功')`);
   await wc.executeJavaScript(
     `document.querySelector('input[name=appId]').scrollIntoView({block:'center'});new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`,
   );
@@ -711,7 +721,7 @@ const wait = async (w, expression) => {
   );
   await wait(window, `document.body.innerText.includes('已确认材料，未发布')`);
   const reviewList = await wc.executeJavaScript(
-    `window.produck.publication.list(${JSON.stringify(first.id)})`,
+    `window.produck.publication.list(${JSON.stringify(firstRelease.id)})`,
   );
   assert.equal(reviewList[0].status, "approved");
   assert.equal(reviewList[0].draftId, drafts[0].id);
@@ -719,7 +729,7 @@ const wait = async (w, expression) => {
   assert.equal(
     (
       await wc.executeJavaScript(
-        `window.produck.publication.list(${JSON.stringify(second.id)})`,
+        `window.produck.publication.list(${JSON.stringify(secondRelease.id)})`,
       )
     ).length,
     0,
@@ -743,7 +753,7 @@ const wait = async (w, expression) => {
   );
   await wait(window, `document.body.innerText.includes('已发布并读回验证')`);
   const published = await wc.executeJavaScript(
-    `window.produck.publication.runs(${JSON.stringify(first.id)})`,
+    `window.produck.publication.runs(${JSON.stringify(firstRelease.id)})`,
   );
   assert.equal(published[0].state, "published");
   assert(published[0].steps.every((s) => s.state === "done"));
@@ -780,7 +790,7 @@ const wait = async (w, expression) => {
   assert.equal(yunxiaoWrites, 1);
   assert.equal(feishuFixture.nodes.length, 2);
   const syncRows = await wc.executeJavaScript(
-    `window.produck.yunxiaoSync.list(${JSON.stringify(first.id)})`,
+    `window.produck.yunxiaoSync.list(${JSON.stringify(firstRelease.id)})`,
   );
   assert.equal(syncRows[0].state, "synced");
   assert.equal(syncRows[0].readback.status.id, "design");
@@ -848,7 +858,7 @@ const wait = async (w, expression) => {
     `document.body.innerText.includes('预检通过：涉及 1 个文字块')`,
   );
   const beforeBuiltinDrafts = await wc.executeJavaScript(
-    `window.produck.documents.list(${JSON.stringify(first.id)})`,
+    `window.produck.documents.list(${JSON.stringify(firstRelease.id)})`,
   );
   builtinArgs = {
     versionId: drafts[0].versionId,
@@ -879,7 +889,7 @@ const wait = async (w, expression) => {
   assert.equal(
     (
       await wc.executeJavaScript(
-        `window.produck.documents.list(${JSON.stringify(first.id)})`,
+        `window.produck.documents.list(${JSON.stringify(firstRelease.id)})`,
       )
     ).length,
     beforeBuiltinDrafts.length,
@@ -892,7 +902,7 @@ const wait = async (w, expression) => {
     `document.body.innerText.includes('内置技能已保存草稿，等待人工审阅。')`,
   );
   const builtinRuns = await wc.executeJavaScript(
-    `window.produck.agent.list(${JSON.stringify(first.id)})`,
+    `window.produck.agent.list(${JSON.stringify(firstRelease.id)})`,
   );
   const builtinRun = builtinRuns.find((r) => r.skill?.id === "builtin:prd");
   assert.equal(builtinRun.state, "succeeded");
@@ -903,7 +913,7 @@ const wait = async (w, expression) => {
   assert.equal(
     (
       await wc.executeJavaScript(
-        `window.produck.documents.list(${JSON.stringify(first.id)})`,
+        `window.produck.documents.list(${JSON.stringify(firstRelease.id)})`,
       )
     ).length,
     beforeBuiltinDrafts.length + 1,
@@ -916,11 +926,11 @@ const wait = async (w, expression) => {
   );
   deliveryPublication = published[0].id;
   const deliveryRun = await wc.executeJavaScript(
-    `window.produck.agent.start(${JSON.stringify(first.id)},'DELIVERY_AGENT_TEST',6,'builtin:delivery')`,
+    `window.produck.agent.start(${JSON.stringify(firstRelease.id)},'DELIVERY_AGENT_TEST',6,'builtin:delivery')`,
   );
   for (let n = 0; n < 200; n++) {
     const runs = await wc.executeJavaScript(
-      `window.produck.agent.list(${JSON.stringify(first.id)})`,
+      `window.produck.agent.list(${JSON.stringify(firstRelease.id)})`,
     );
     const current = runs.find((r) => r.id === deliveryRun.id);
     if (current.state === "succeeded") break;
@@ -930,12 +940,12 @@ const wait = async (w, expression) => {
     );
     if (current.state === "waiting-user")
       await wc.executeJavaScript(
-        `window.produck.agent.approve(${JSON.stringify(first.id)},${JSON.stringify(current.id)},${JSON.stringify(current.steps.at(-1).id)},true)`,
+        `window.produck.agent.approve(${JSON.stringify(firstRelease.id)},${JSON.stringify(current.id)},${JSON.stringify(current.steps.at(-1).id)},true)`,
       );
     await new Promise((r) => setTimeout(r, 50));
   }
   const saved = await wc.executeJavaScript(
-    `window.produck.documentReviews.saved(${JSON.stringify(first.id)},${JSON.stringify(published[0].id)})`,
+    `window.produck.documentReviews.saved(${JSON.stringify(firstRelease.id)},${JSON.stringify(published[0].id)})`,
   );
   assert.equal(saved.review.state, "pending");
   assert(saved.review.after.includes("Agent 准备的差异"));
@@ -987,6 +997,96 @@ const wait = async (w, expression) => {
   writeFileSync(
     "docs/verification/desktop-python.png",
     (await wc.capturePage()).toPNG(),
+  );
+  // Exercise the product-release UI and ensure an existing publication stays in V1.
+  await wc.executeJavaScript(
+    `document.querySelector('[aria-label="创建版本"]').click()`,
+  );
+  await wait(
+    window,
+    `document.querySelector('[aria-label="新版本名称"]') !== null`,
+  );
+  await wc.executeJavaScript(
+    `{ const input=document.querySelector('[aria-label="新版本名称"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'V2.0.0');input.dispatchEvent(new Event('input',{bubbles:true})); }`,
+  );
+  await wc.executeJavaScript(
+    `document.querySelector('[aria-label="新版本名称"]').form.requestSubmit()`,
+  );
+  await wait(window, `document.body.innerText.includes('从旧版本复制原型')`);
+  const nextState = await wc.executeJavaScript(
+    `window.produck.projects.state()`,
+  );
+  const nextRelease = nextState.activeReleaseId;
+  assert.notEqual(nextRelease, firstRelease.id);
+  assert.deepEqual(
+    await wc.executeJavaScript(
+      `window.produck.documents.list(${JSON.stringify(nextRelease)})`,
+    ),
+    [],
+  );
+  assert.deepEqual(
+    await wc.executeJavaScript(
+      `window.produck.publication.runs(${JSON.stringify(nextRelease)})`,
+    ),
+    [],
+  );
+  assert.equal(
+    (
+      await wc.executeJavaScript(
+        `window.produck.platforms.profile(${JSON.stringify(nextRelease)},'feishu')`,
+      )
+    ).url,
+    "",
+  );
+  await wc.executeJavaScript(
+    `{ const input=document.querySelector('[aria-label="飞书迭代父节点地址"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'https://example.feishu.cn/wiki/next');input.dispatchEvent(new Event('input',{bubbles:true})); }`,
+  );
+  await wc.executeJavaScript(
+    `document.querySelector('[aria-label="飞书迭代父节点地址"]').form.requestSubmit()`,
+  );
+  await wait(window, `document.body.innerText.includes('版本设置已保存')`);
+  assert.equal(
+    (
+      await wc.executeJavaScript(
+        `window.produck.platforms.profile(${JSON.stringify(firstRelease.id)},'feishu')`,
+      )
+    ).url,
+    "https://example.feishu.cn/wiki/fixture",
+  );
+  await wc.executeJavaScript(
+    `{ const select=document.querySelector('[aria-label="来源产品版本"]');select.value=${JSON.stringify(firstRelease.id)};select.dispatchEvent(new Event('change',{bubbles:true})); }`,
+  );
+  await wait(
+    window,
+    `document.querySelector('[aria-label="来源原型"]')?.options.length > 1`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='复制到当前版本').click()`,
+  );
+  await wait(window, `document.body.innerText.includes('已复制为未批准候选')`);
+  const copies = await wc.executeJavaScript(
+    `window.produck.workbench.versions(${JSON.stringify(nextRelease)})`,
+  );
+  assert.equal(copies.length, 1);
+  assert.equal(copies[0].approved, false);
+  writeFileSync(
+    "docs/verification/desktop-releases.png",
+    (await wc.capturePage()).toPNG(),
+  );
+  await wc.executeJavaScript(
+    `{ const select=document.querySelector('[aria-label="切换版本"]');select.value=${JSON.stringify(firstRelease.id)};select.dispatchEvent(new Event('change',{bubbles:true})); }`,
+  );
+  await wait(
+    window,
+    `document.querySelector('[aria-label="切换版本"]')?.value===${JSON.stringify(firstRelease.id)}`,
+  );
+  assert.equal(
+    (
+      await wc.executeJavaScript(
+        `window.produck.publication.runs(${JSON.stringify(firstRelease.id)})`,
+      )
+    )[0].id,
+    published[0].id,
   );
   assert.equal(await wc.executeJavaScript("typeof require"), "undefined");
   assert.equal(errors.length, 0, errors.join("\n"));
