@@ -8,3 +8,4 @@ release/
 !.env.example
 .credential-store/
 outputs/
+vendor/

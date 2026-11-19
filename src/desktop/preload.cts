@@ -53,6 +53,23 @@ contextBridge.exposeInMainWorld(
         ipcRenderer.invoke("platforms:test", id, provider),
     },
     skills: {
+      cancelPython: (id: string) =>
+        ipcRenderer.invoke("skills:python-cancel", id),
+      runPython: (
+        id: string,
+        skillId: string,
+        fingerprint: string,
+        input: string,
+      ) =>
+        ipcRenderer.invoke(
+          "skills:python-run",
+          id,
+          skillId,
+          fingerprint,
+          input,
+        ),
+      revealPython: (id: string, runId: string) =>
+        ipcRenderer.invoke("skills:python-reveal", id, runId),
       list: (id: string) => ipcRenderer.invoke("skills:list", id),
       import: (id: string) => ipcRenderer.invoke("skills:import", id),
     },

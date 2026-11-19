@@ -1,0 +1,7 @@
+{
+  "version": "3.12.16",
+  "release": "20261110",
+  "arch": "aarch64-apple-darwin",
+  "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261110/cpython-3.12.16%2B20261110-aarch64-apple-darwin-install_only.tar.gz",
+  "sha256": "e956e60bc9465d577ef8062059aa05cd3a2665b4b8678a2ed24e432368330b8f"
+}

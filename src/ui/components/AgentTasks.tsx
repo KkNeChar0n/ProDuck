@@ -84,7 +84,7 @@ export function AgentTasks({ projectId }: { projectId: string }) {
         >
           <option value="">不使用技能</option>
           {skills
-            .filter((s) => s.status !== "unsupported")
+            .filter((s) => s.status !== "unsupported" && !s.python)
             .map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}

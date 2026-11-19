@@ -1,3 +1,4 @@
+import type { PythonRun } from "./skills.js";
 import type { YunxiaoSync } from "./yunxiao.js";
 import type {
   RemoteDocumentSnapshot,
@@ -104,6 +105,14 @@ export interface DesktopBridge {
     test(id: string, provider: Platform): Promise<ConnectionTest>;
   };
   skills: {
+    cancelPython(id: string): Promise<void>;
+    runPython(
+      id: string,
+      skillId: string,
+      fingerprint: string,
+      input: string,
+    ): Promise<PythonRun | null>;
+    revealPython(id: string, runId: string): Promise<void>;
     list(id: string): Promise<ImportedSkill[]>;
     import(id: string): Promise<ImportedSkill | null>;
   };

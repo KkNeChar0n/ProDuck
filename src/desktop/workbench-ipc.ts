@@ -63,7 +63,7 @@ export function registerWorkbenchIpc(
     productTools(versions, generator, documents),
   );
   const skills = new SkillRepository(projects);
-  registerSkillsIpc(skills, getWindow);
+  registerSkillsIpc(skills, getWindow, projects);
   const agent = new AgentRunner(
     db,
     projects,

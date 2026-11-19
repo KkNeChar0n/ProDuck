@@ -37,7 +37,10 @@ try {
   rmSync(join(resources, "default_app.asar"), { force: true });
   const appRoot = join(resources, "app");
   mkdirSync(appRoot, { recursive: true });
-  cpSync(resolve("dist"), join(appRoot, "dist"), { recursive: true });
+  cpSync(resolve("dist"), join(appRoot, "dist"), {
+    recursive: true,
+    verbatimSymlinks: true,
+  });
   writeFileSync(
     join(appRoot, "package.json"),
     JSON.stringify(
@@ -76,6 +79,9 @@ try {
       ],
     ),
   );
+  versions.python = JSON.parse(
+    readFileSync(resolve("scripts/python-runtime.json"), "utf8"),
+  ).version;
   writeFileSync(
     join(appRoot, "runtime-manifest.json"),
     JSON.stringify(runtimeManifest(appRoot, versions), null, 2),
@@ -95,7 +101,7 @@ try {
   symlinkSync("/Applications", join(payload, "Applications"));
   writeFileSync(
     join(payload, "使用说明.txt"),
-    `Produck ${pkg.version} 开发测试包（arm64，macOS 13+）\n拖入 Applications 后打开。只作本机开发测试，未完成 Developer ID 签名、公证或干净机器验收。\n已实现项目、模型、页面采集、候选原型和本地 PRD 草稿；已加入受控 Agent 任务和说明型 Skill 导入。飞书首次发布已实现（真实租户待联调），云效同步已实现（真实租户待联调），原文差异合并暂缓，脚本型 Skill 尚未完成，真实模型重建质量暂未验收。\n`,
+    `Produck ${pkg.version} 开发测试包（arm64，macOS 13+）\n拖入 Applications 后打开。只作本机开发测试，未完成 Developer ID 签名、公证或干净机器验收。\n已实现项目、模型、页面采集、候选原型和本地 PRD 草稿；已加入受控 Agent 任务和说明型 Skill 导入。飞书首次发布已实现（真实租户待联调），云效同步已实现（真实租户待联调），原文差异合并暂缓，已支持带声明的标准库 Python Skill（网络与子进程禁用），其他脚本和第三方依赖尚不支持，真实模型重建质量暂未验收。\n`,
   );
   mkdirSync("release", { recursive: true });
   run("/usr/bin/hdiutil", [

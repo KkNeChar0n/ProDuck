@@ -19,7 +19,8 @@ let server,
   plannerCalls = 0,
   builtinCalls = 0,
   builtinArgs,
-  deliveryPublication;
+  deliveryPublication,
+  importPython = false;
 async function cleanup() {
   if (credentialRef) {
     const { MacKeychain } = await import(
@@ -74,10 +75,28 @@ dialog.showOpenDialog = async (_window, options) => ({
     options.title === "导入交接资料"
       ? join(root, "handoff.md")
       : options.title === "导入 Skill 文件夹"
-        ? join(root, "skill")
+        ? join(root, importPython ? "python-skill" : "skill")
         : root,
   ],
 });
+mkdirSync(join(root, "python-skill"));
+writeFileSync(
+  join(root, "python-skill/SKILL.md"),
+  "---\nname: desktop-python-fixture\n---\n生成测试结果。",
+);
+writeFileSync(
+  join(root, "python-skill/produck-python.json"),
+  JSON.stringify({
+    runtime: "python3.12",
+    entry: "main.py",
+    dependencies: [],
+    capabilities: { read: "skill", write: "output", network: false },
+  }),
+);
+writeFileSync(
+  join(root, "python-skill/main.py"),
+  "import json,sys\ndata=json.load(sys.stdin)\nopen('result.json','w').write(json.dumps(data))\nprint('PYTHON_DESKTOP_OK')\n",
+);
 const ready = new Promise((resolve) =>
   app.once("browser-window-created", (_event, window) =>
     window.webContents.once("did-finish-load", () => resolve(window)),
@@ -124,7 +143,8 @@ const wait = async (w, expression) => {
   dialog.showMessageBox = async (_window, options) => {
     assert(
       options.buttons.includes("确认发布到飞书") ||
-        options.buttons.includes("确认同步云效"),
+        options.buttons.includes("确认同步云效") ||
+        options.buttons.includes("授权并运行 Python"),
     );
     return { response: 1, checkboxChecked: false };
   };
@@ -940,6 +960,32 @@ const wait = async (w, expression) => {
   );
   writeFileSync(
     "docs/verification/desktop-agent-delivery.png",
+    (await wc.capturePage()).toPNG(),
+  );
+  importPython = true;
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('nav button')).find(b=>b.textContent.includes('Skills')).click()`,
+  );
+  await wait(
+    window,
+    `Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='导入 Skill 文件夹')`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='导入 Skill 文件夹').click()`,
+  );
+  await wait(
+    window,
+    `document.body.innerText.includes('desktop-python-fixture')`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='运行 Python 脚本').click()`,
+  );
+  await wait(window, `document.body.innerText.includes('PYTHON_DESKTOP_OK')`);
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('h3')).find(h=>h.textContent.includes('desktop-python-fixture')).scrollIntoView({block:'start'});new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`,
+  );
+  writeFileSync(
+    "docs/verification/desktop-python.png",
     (await wc.capturePage()).toPNG(),
   );
   assert.equal(await wc.executeJavaScript("typeof require"), "undefined");

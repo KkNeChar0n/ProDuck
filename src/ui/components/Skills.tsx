@@ -1,3 +1,4 @@
+import { PythonSkillPanel } from "./PythonSkillPanel";
 import { builtinWorkflows } from "../../skills/builtin";
 import { useEffect, useState } from "react";
 import type { ImportedSkill } from "../../contracts/skills";
@@ -55,8 +56,9 @@ export function Skills({
       </p>
       <h2>导入的 Skills</h2>
       <p>
-        导入包含 SKILL.md 的文件夹。纯说明技能可供 Agent
-        使用；脚本、外部命令和未适配工具会列出具体限制。
+        导入包含 SKILL.md 的文件夹。纯说明技能可供 Agent 使用；带
+        produck-python.json 声明的标准库 Python
+        技能可独立授权运行，其他脚本依赖会列出限制。
       </p>
       <button
         className="primary"
@@ -109,6 +111,9 @@ export function Skills({
               {m.requested} → {m.provided}
             </p>
           ))}
+          {skill.python && skill.status !== "unsupported" && (
+            <PythonSkillPanel projectId={projectId} skill={skill} />
+          )}
           <details>
             <summary>{skill.resources.length} 个资源</summary>
             <ul>

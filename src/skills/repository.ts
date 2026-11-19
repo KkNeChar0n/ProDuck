@@ -1,3 +1,4 @@
+import { parsePythonManifest, type PythonSkill } from "./python-manifest.js";
 import { agentBuiltins, builtinSkillRecords } from "./agent-builtins.js";
 import { readFileSync, readdirSync, lstatSync, existsSync } from "node:fs";
 import { join, relative, resolve, isAbsolute, extname } from "node:path";
@@ -77,7 +78,23 @@ export class SkillRepository {
     if (!main) throw new Error("所选目录缺少 SKILL.md");
     const reasons: string[] = [],
       requested = new Set<string>();
+    let python: PythonSkill | undefined;
+    if (files.has("produck-python.json")) {
+      try {
+        python = parsePythonManifest(
+          files.get("produck-python.json")!.toString("utf8"),
+        );
+        if (!files.has(python.entry)) {
+          reasons.push("Python 入口文件不存在");
+          python = undefined;
+        }
+      } catch (e) {
+        reasons.push(e instanceof Error ? e.message : "Python 声明无效");
+      }
+    }
     for (const [path, content] of files) {
+      if (python && (path === "produck-python.json" || extname(path) === ".py"))
+        continue;
       if (
         [
           ".js",
@@ -156,6 +173,7 @@ export class SkillRepository {
       reasons.push("说明和文本资源超过当前技能上下文限制（20000 字符）");
     const fingerprint = this.fingerprint(files),
       record: ImportedSkill = {
+        python,
         id: randomUUID(),
         name: metadata(main, "name") || root.split("/").at(-1)!,
         description: metadata(main, "description") || "未提供描述",
@@ -165,7 +183,7 @@ export class SkillRepository {
         resources: [...files.keys()].sort(),
         status: reasons.length
           ? "unsupported"
-          : requested.has("Write")
+          : python || requested.has("Write")
             ? "needs-approval"
             : "runnable",
         reasons: [...new Set(reasons)],
@@ -181,6 +199,28 @@ export class SkillRepository {
       JSON.stringify([record, ...this.list(id)], null, 2),
     );
     return record;
+  }
+  pythonSnapshot(id: string, skillId: string, fingerprint: string) {
+    const record = this.list(id).find((s) => s.id === skillId);
+    if (
+      !record?.python ||
+      record.status === "unsupported" ||
+      record.fingerprint !== fingerprint
+    )
+      throw new Error("Python 技能未就绪或版本已变化，请重新导入");
+    const workspace = this.projects.get(id).workspace;
+    const files = new Map(
+      record.resources.map((path) => [
+        path,
+        readFileSync(projectPath(workspace, `skills/${record.id}/${path}`)),
+      ]),
+    );
+    if (this.fingerprint(files) !== fingerprint)
+      throw new Error("技能内容已变化，请重新导入并复核权限");
+    const manifest = parsePythonManifest(
+      files.get("produck-python.json")!.toString("utf8"),
+    );
+    return { record, files, manifest };
   }
   private fingerprint(files: Map<string, Buffer>) {
     const hash = createHash("sha256");
@@ -201,6 +241,7 @@ export class SkillRepository {
       };
     const record = this.list(id).find((s) => s.id === skillId);
     if (!record) throw new Error("技能不属于当前项目");
+    if (record.python) throw new Error("Python 技能请在 Skills 页独立授权运行");
     if (record.status === "unsupported")
       throw new Error("技能存在未适配依赖，请先查看兼容性报告");
     const workspace = this.projects.get(id).workspace,
