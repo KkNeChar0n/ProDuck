@@ -10,6 +10,8 @@ export function ModelSettings({ projectId }: { projectId: string }) {
     [model, setModel] = useState(""),
     [token, setToken] = useState(""),
     [saved, setSaved] = useState(false),
+    [dirty, setDirty] = useState(false),
+    [loaded, setLoaded] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
@@ -30,6 +32,7 @@ export function ModelSettings({ projectId }: { projectId: string }) {
           setModel(value.model);
           setSaved(value.hasCredential);
         }
+        if (active) setLoaded(true);
       })
       .catch((e) => {
         if (active) setError(errorText(e));
@@ -43,6 +46,12 @@ export function ModelSettings({ projectId }: { projectId: string }) {
       <h3>项目模型</h3>
       <p className="muted">凭证保存到 macOS 钥匙串，项目文件仅保存引用。</p>
       <form
+        onChange={() => {
+          setDirty(true);
+          setError("");
+          setNotice("");
+          setCapabilities(null);
+        }}
         onSubmit={async (e) => {
           e.preventDefault();
           setBusy(true);
@@ -55,8 +64,8 @@ export function ModelSettings({ projectId }: { projectId: string }) {
               model,
               ...(token ? { token } : {}),
             });
-            setCapabilities(await desktop().models.capabilities(projectId));
             setToken("");
+            setDirty(false);
             setSaved(true);
             setNotice("模型配置已保存，可以测试连接或开始对话。");
           } catch (error) {
@@ -69,6 +78,7 @@ export function ModelSettings({ projectId }: { projectId: string }) {
         <div className="form-field">
           <label htmlFor="model-provider">供应商</label>
           <select
+            disabled={busy || !loaded}
             id="model-provider"
             value={provider}
             onChange={(e) => {
@@ -88,6 +98,7 @@ export function ModelSettings({ projectId }: { projectId: string }) {
         <div className="form-field">
           <label htmlFor="model-endpoint">Base URL</label>
           <input
+            disabled={busy || !loaded}
             id="model-endpoint"
             required
             type="url"
@@ -98,6 +109,7 @@ export function ModelSettings({ projectId }: { projectId: string }) {
         <div className="form-field">
           <label htmlFor="model-id">模型名称</label>
           <input
+            disabled={busy || !loaded}
             id="model-id"
             required
             value={model}
@@ -108,6 +120,7 @@ export function ModelSettings({ projectId }: { projectId: string }) {
         <div className="form-field">
           <label htmlFor="model-token">API token</label>
           <input
+            disabled={busy || !loaded}
             id="model-token"
             type="password"
             autoComplete="off"
@@ -122,7 +135,7 @@ export function ModelSettings({ projectId }: { projectId: string }) {
         <div className="dialog-actions">
           <button
             type="button"
-            disabled={busy || !saved}
+            disabled={busy || !saved || dirty || !loaded}
             onClick={async () => {
               setBusy(true);
               setError("");
@@ -139,11 +152,16 @@ export function ModelSettings({ projectId }: { projectId: string }) {
           >
             测试已保存配置
           </button>
-          <button className="primary" disabled={busy}>
+          <button className="primary" disabled={busy || !loaded}>
             {busy ? "处理中…" : "保存模型配置"}
           </button>
         </div>
       </form>
+      {dirty && (
+        <p role="status" className="muted">
+          配置已修改，请先保存，再测试连接或检测模型能力。
+        </p>
+      )}
       <div className="notice">
         <strong>模型能力</strong>
         <p className="muted">
@@ -151,7 +169,7 @@ export function ModelSettings({ projectId }: { projectId: string }) {
           当前使用文本决策模式，不依赖原生工具调用。
         </p>
         <button
-          disabled={busy || !saved}
+          disabled={busy || !saved || dirty || !loaded}
           onClick={async () => {
             setBusy(true);
             setError("");
