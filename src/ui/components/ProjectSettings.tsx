@@ -7,7 +7,10 @@ export function ProjectSettings({ project }: { project: Project }) {
   const [error, setError] = useState("");
   return (
     <article className="paper">
-      <h2>{project.name}</h2>
+      <h2>{project.name} · 项目设置</h2>
+      <p className="muted">
+        以下配置由本项目的所有版本共享。飞书迭代地址请点击版本右侧的齿轮设置。
+      </p>
       <ModelSettings projectId={project.id} />
       <div className="info-row">
         <div>

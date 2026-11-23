@@ -51,7 +51,7 @@ export function ReleaseSettings({
   }
   return (
     <article className="paper release-settings">
-      <h2>版本设置</h2>
+      <h2>{release.name} · 版本设置</h2>
       <p className="muted">
         原型、文档、审批与交付记录归属于此版本。模型、工作空间与平台凭证沿用项目配置。
       </p>
@@ -76,7 +76,7 @@ export function ReleaseSettings({
           />
         </label>
         <label>
-          飞书迭代父节点地址
+          飞书迭代地址（当前版本）
           <input
             aria-label="飞书迭代父节点地址"
             type="url"

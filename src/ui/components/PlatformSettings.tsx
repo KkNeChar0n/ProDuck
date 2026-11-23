@@ -80,7 +80,11 @@ export function PlatformSettings({
   }
   return (
     <section>
-      <h3>{provider === "feishu" ? "飞书知识库" : "云效中心版"}</h3>
+      <h3>
+        {provider === "feishu"
+          ? "飞书应用凭证（项目共享）"
+          : "云效中心版（项目共享）"}
+      </h3>
       {loaded && (
         <form
           className="connection-form"

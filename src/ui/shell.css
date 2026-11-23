@@ -1084,3 +1084,25 @@ dialog::backdrop {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.scope-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-bottom: 12px;
+}
+.scope-selector select {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+.scope-settings {
+  flex: 0 0 32px;
+  height: 36px;
+  font-size: 20px;
+}
+.scope-settings[aria-pressed="true"] {
+  background: #e1e9df;
+  color: var(--green);
+}

@@ -662,9 +662,21 @@ const wait = async (w, expression) => {
     (await wc.capturePage()).toPNG(),
   );
   await wc.executeJavaScript(
-    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent.trim()==='项目设置').click()`,
+    `document.querySelector('[aria-label="项目设置"]').click()`,
   );
   await wait(window, `document.querySelector('input[name=appId]') !== null`);
+  assert.equal(
+    await wc.executeJavaScript(
+      `document.querySelector('[aria-label="飞书迭代父节点地址"]') === null`,
+    ),
+    true,
+  );
+  assert.equal(
+    await wc.executeJavaScript(
+      `Array.from(document.querySelectorAll('button')).some(b => b.textContent.trim() === '配置项目')`,
+    ),
+    false,
+  );
   await wc.executeJavaScript(
     `document.querySelector('input[name=appId]').value='cli_fixture';document.querySelector('input[name=appId]').form.querySelector('input[name=secret]').value='synthetic-platform-secret';document.querySelector('input[name=appId]').form.requestSubmit()`,
   );
@@ -1013,6 +1025,12 @@ const wait = async (w, expression) => {
     `document.querySelector('[aria-label="新版本名称"]').form.requestSubmit()`,
   );
   await wait(window, `document.body.innerText.includes('从旧版本复制原型')`);
+  assert.equal(
+    await wc.executeJavaScript(
+      `document.querySelector('input[name=appId]') === null`,
+    ),
+    true,
+  );
   const nextState = await wc.executeJavaScript(
     `window.produck.projects.state()`,
   );

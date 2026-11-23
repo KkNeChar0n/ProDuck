@@ -133,13 +133,6 @@ export function App() {
         </strong>
         <span className="title-path">你的产品工作空间</span>
         <span className="demo-badge">本地项目 · 开发预览</span>
-        <button
-          className="quiet"
-          disabled={!project}
-          onClick={() => setView("settings")}
-        >
-          项目设置
-        </button>
       </header>
       <aside className="sidebar">
         <div className="project-label">
@@ -152,20 +145,32 @@ export function App() {
             ＋
           </button>
         </div>
-        <select
-          aria-label="切换项目"
-          id="project-select"
-          value={state.activeProjectId ?? ""}
-          disabled={loading || switching || !project}
-          onChange={(e) => void select(e.target.value)}
-        >
-          {!project && <option value="">还没有项目</option>}
-          {state.projects.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+        <div className="scope-selector">
+          <select
+            aria-label="切换项目"
+            id="project-select"
+            value={state.activeProjectId ?? ""}
+            disabled={loading || switching || !project}
+            onChange={(e) => void select(e.target.value)}
+          >
+            {!project && <option value="">还没有项目</option>}
+            {state.projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          <button
+            className="icon scope-settings"
+            aria-label="项目设置"
+            title="项目设置：模型、工作空间、飞书凭证与云效"
+            aria-pressed={view === "settings"}
+            disabled={!project || switching}
+            onClick={() => setView("settings")}
+          >
+            ⚙
+          </button>
+        </div>
         {project && (
           <>
             <div className="project-label">
@@ -178,26 +183,31 @@ export function App() {
                 ＋
               </button>
             </div>
-            <select
-              aria-label="切换版本"
-              value={release?.id ?? ""}
-              disabled={switching}
-              onChange={(e) => void selectRelease(e.target.value)}
-            >
-              {!release && <option value="">请创建版本</option>}
-              {state.releases.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-            <button
-              className="nav"
-              disabled={!release}
-              onClick={() => setView("release-settings")}
-            >
-              版本设置
-            </button>
+            <div className="scope-selector">
+              <select
+                aria-label="切换版本"
+                value={release?.id ?? ""}
+                disabled={switching}
+                onChange={(e) => void selectRelease(e.target.value)}
+              >
+                {!release && <option value="">请创建版本</option>}
+                {state.releases.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="icon scope-settings"
+                aria-label="版本设置"
+                title="版本设置：版本名称、飞书迭代地址与原型起点"
+                aria-pressed={view === "release-settings"}
+                disabled={!release || switching}
+                onClick={() => setView("release-settings")}
+              >
+                ⚙
+              </button>
+            </div>
           </>
         )}
         <nav>
@@ -222,12 +232,6 @@ export function App() {
           <br />
           让想法成为可交付的方案。
         </div>
-        <button
-          className={`nav bottom ${view === "settings" ? "active" : ""}`}
-          onClick={() => setView("settings")}
-        >
-          <span>⚙</span>项目设置
-        </button>
         <div className="profile">
           <span className="avatar">P</span>
           <div>
@@ -239,7 +243,8 @@ export function App() {
         <section className="work-heading">
           <div>
             <div className="breadcrumb">
-              {project?.name ?? "Produck"} / {release?.name ?? "尚无版本"} /{" "}
+              {project?.name ?? "Produck"} /{" "}
+              {view !== "settings" && `${release?.name ?? "尚无版本"} / `}
               {view === "workbench" ? "工作台" : title}
             </div>
             <h1>{title}</h1>
@@ -333,12 +338,11 @@ export function App() {
                 : "选择一个文件夹，开始新的项目"}
             </small>
           </div>
-          <button
-            className="primary"
-            onClick={() => (project ? setView("settings") : setCreating(true))}
-          >
-            {project ? "配置项目" : "创建项目"}
-          </button>
+          {!project && (
+            <button className="primary" onClick={() => setCreating(true)}>
+              创建项目
+            </button>
+          )}
         </footer>
       </main>
       <AgentPanel
