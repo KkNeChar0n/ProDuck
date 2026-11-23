@@ -29,10 +29,20 @@ test("restart records interruption; explicit retry keeps original inputs and can
     },
     new Uint8Array([1]),
   );
-  const baseline = versions.create(p.id, "<html><body>基线</body></html>", [
-    capture.id,
-  ]);
+  const baseline = versions.create(
+    p.id,
+    '<html><body><h1 data-produck-id="title">基线</h1><button data-produck-id="save">保存</button></body></html>',
+    [capture.id],
+  );
   versions.approve(p.id, baseline.id);
+  const batch = {
+    baselineId: baseline.id,
+    contentHash: baseline.contentHash,
+    items: [
+      { elementId: "title", prompt: "修改标题" },
+      { elementId: "save", prompt: "修改按钮" },
+    ],
+  };
   const inputRef = "workflows/interrupted-prototype.json";
   atomicWrite(
     join(p.workspace, inputRef),
@@ -41,6 +51,7 @@ test("restart records interruption; explicit retry keeps original inputs and can
       captureId: capture.id,
       baselineId: baseline.id,
       change: "增加状态筛选",
+      edit: { batch },
     }),
   );
   db.prepare(
@@ -57,6 +68,7 @@ test("restart records interruption; explicit retry keeps original inputs and can
   const models = {
     request: async (_id: string, prompt: string) => {
       calls++;
+      assert(prompt.includes(JSON.stringify({ batch })));
       assert.match(prompt, /增加状态筛选/);
       assert.match(prompt, /基线/);
       throw new Error("模拟断网");

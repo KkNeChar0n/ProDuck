@@ -1,5 +1,5 @@
 import { PrototypeChecks } from "./PrototypeChecks";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   PrototypeDetails,
   ElementSelection,
@@ -12,6 +12,10 @@ import { desktop, errorText } from "../bridge";
 import { ProjectSources } from "./ProjectSources";
 export interface PrototypeContext {
   element?: ElementSelection | null;
+  picks: ElementSelection[];
+  picking: boolean;
+  togglePicker: () => Promise<void>;
+  contentHash: string;
   versionId: string;
   captureId: string;
 }
@@ -35,6 +39,7 @@ export function Workbench({
     [versions, setVersions] = useState<PrototypeVersion[]>([]),
     [selected, setSelected] = useState(""),
     [previewReady, setPreviewReady] = useState(false),
+    [readyVersion, setReadyVersion] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [progress, setProgress] = useState<GenerationProgress | null>(null);
@@ -46,7 +51,13 @@ export function Workbench({
     [element, setElement] = useState<ElementSelection | null>(null),
     [comparison, setComparison] = useState<PrototypeComparison | null>(null),
     [compareId, setCompareId] = useState("");
+  const [picks, setPicks] = useState<ElementSelection[]>([]);
+  const togglePicker = useCallback(async () => {
+    await desktop().workbench.selectionMode(projectId, !picking);
+    setPicking(!picking);
+  }, [projectId, picking]);
   useEffect(() => {
+    setPicks([]);
     setElement(null);
     setPicking(false);
     setComparison(null);
@@ -56,9 +67,12 @@ export function Workbench({
     let active = true;
     const timer = setInterval(() => {
       void desktop()
-        .workbench.selection(projectId)
+        .workbench.takeSelections(projectId, selected)
         .then((value) => {
-          if (active) setElement(value);
+          if (active && value.length) {
+            setElement(value.at(-1)!);
+            setPicks(value);
+          }
         })
         .catch((e) => {
           if (active) setError(errorText(e));
@@ -68,7 +82,7 @@ export function Workbench({
       active = false;
       clearInterval(timer);
     };
-  }, [picking, previewReady, visible, projectId]);
+  }, [picking, previewReady, visible, projectId, selected]);
   const surface = useRef<HTMLDivElement>(null),
     alive = useRef(true);
   useEffect(() => {
@@ -109,11 +123,35 @@ export function Workbench({
   useEffect(() => {
     const version = versions.find((v) => v.id === selected);
     onContext(
-      tab === "prototype" && version
-        ? { versionId: version.id, captureId: version.sourceRefs[0], element }
+      tab === "prototype" &&
+        previewReady &&
+        readyVersion === selected &&
+        comparison === null &&
+        version
+        ? {
+            versionId: version.id,
+            contentHash: version.contentHash,
+            captureId: version.sourceRefs[0],
+            element,
+            picks,
+            picking,
+            togglePicker,
+          }
         : null,
     );
-  }, [tab, selected, versions, onContext, element]);
+  }, [
+    tab,
+    selected,
+    versions,
+    onContext,
+    element,
+    picks,
+    picking,
+    togglePicker,
+    previewReady,
+    readyVersion,
+    comparison,
+  ]);
   useEffect(() => {
     setPreviewReady(false);
     setDetails(null);
@@ -124,6 +162,7 @@ export function Workbench({
       .workbench.loadPrototype(projectId, selected)
       .then(async (result) => {
         if (!current) return;
+        setReadyVersion(selected);
         setPreviewReady(true);
         if (result)
           setRestored(
@@ -315,11 +354,7 @@ export function Workbench({
                 aria-pressed={picking}
                 onClick={() =>
                   void perform(async () => {
-                    await desktop().workbench.selectionMode(
-                      projectId,
-                      !picking,
-                    );
-                    setPicking(!picking);
+                    await togglePicker();
                   })
                 }
               >
@@ -442,6 +477,11 @@ export function Workbench({
                   覆盖页面：{c.title} · {c.url}
                   <br />
                   {c.scope}
+                </p>
+              ))}
+              {details.batch?.items.map((item, i) => (
+                <p key={item.elementId}>
+                  修改 {i + 1} · #{item.elementId}：{item.prompt}
                 </p>
               ))}
               {details.elementId && <p>目标元素：{details.elementId}</p>}

@@ -199,6 +199,12 @@ export class PrototypeSurface {
       { code: "globalThis.__produckPreview.selection()" },
     ]);
   }
+  async takeSelections() {
+    if (!this.view) return [];
+    return this.view.webContents.executeJavaScriptInIsolatedWorld(999, [
+      { code: "globalThis.__produckPreview.takeSelections()" },
+    ]);
+  }
   async captureState(): Promise<PreviewState> {
     if (!this.view) throw new Error("请先加载原型");
     const value = await this.view.webContents.executeJavaScriptInIsolatedWorld(

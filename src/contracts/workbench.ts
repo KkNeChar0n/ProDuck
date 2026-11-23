@@ -81,7 +81,17 @@ export interface PreviewState {
     scrollLeft: number;
   }[];
 }
+export interface ElementPrompt {
+  elementId: string;
+  prompt: string;
+}
+export interface ElementPromptBatch {
+  baselineId: string;
+  contentHash: string;
+  items: ElementPrompt[];
+}
 export interface PrototypeEdit {
+  batch?: ElementPromptBatch;
   elementId?: string;
   state?: PreviewState;
 }
@@ -94,6 +104,7 @@ export interface PrototypeDetails {
     scope: string;
   }[];
   request: string;
+  batch?: ElementPromptBatch;
   elementId?: string;
   state?: PreviewState;
   changes: {

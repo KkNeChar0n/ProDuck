@@ -320,6 +320,17 @@ export function registerWorkbenchIpc(
       return preview.selectionMode(enabled);
     },
   );
+  ipcMain.handle(
+    "prototypes:take-selections",
+    async (e, id: string, versionId: string) => {
+      trusted(e, id);
+      if (previewProject !== id || previewVersion !== versionId) return [];
+      const result = await preview.takeSelections();
+      return previewProject === id && previewVersion === versionId
+        ? result
+        : [];
+    },
+  );
   ipcMain.handle("prototypes:selection", (e, id: string) => {
     trusted(e, id);
     return previewProject === id ? preview.selection() : null;
@@ -333,6 +344,7 @@ export function registerWorkbenchIpc(
       change?: string,
       baselineId?: string,
       elementId?: string,
+      batch?: import("../contracts/workbench.js").ElementPromptBatch,
     ) => {
       trusted(e, id);
       let edit;
@@ -345,8 +357,11 @@ export function registerWorkbenchIpc(
         const selection = await preview.selection();
         if (elementId && selection?.id !== elementId)
           throw new Error("选中元素已变化，请重新选择");
-        edit = { state, elementId };
-      } else if (elementId) throw new Error("请先打开要修改的原型版本");
+        if (previewProject !== id || previewVersion !== baselineId)
+          throw new Error("原型已切换，请重新提交");
+        edit = { state, elementId, batch };
+      } else if (elementId || batch)
+        throw new Error("请先打开要修改的原型版本");
       return generator.generate(
         id,
         captureId,

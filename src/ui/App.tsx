@@ -122,7 +122,9 @@ export function App() {
       <header className="titlebar">
         <button
           className="icon"
-          aria-label="收起或展开导航"
+          aria-label={collapsed ? "展开导航" : "收起导航"}
+          title={collapsed ? "展开导航" : "收起导航"}
+          aria-expanded={!collapsed}
           onClick={() => setCollapsed(!collapsed)}
         >
           ☷
@@ -135,6 +137,12 @@ export function App() {
         <span className="demo-badge">本地项目 · 开发预览</span>
       </header>
       <aside className="sidebar">
+        <button
+          className="collapse-navigation"
+          onClick={() => setCollapsed(true)}
+        >
+          ‹ 收起左侧
+        </button>
         <div className="project-label">
           当前项目
           <button

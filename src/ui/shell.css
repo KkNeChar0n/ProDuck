@@ -1106,3 +1106,49 @@ dialog::backdrop {
   background: #e1e9df;
   color: var(--green);
 }
+
+.collapse-navigation {
+  align-self: flex-end;
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+.composer {
+  max-height: 70%;
+  overflow-y: auto;
+}
+.element-editor {
+  margin-bottom: 12px;
+}
+.element-editor-heading,
+.element-prompt > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.element-editor small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.element-prompt-list {
+  max-height: 32vh;
+  overflow-y: auto;
+}
+.element-prompt {
+  background: #f0f0e8;
+  padding: 8px;
+  border-radius: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+.element-prompt textarea {
+  width: 100%;
+  margin-top: 6px;
+  resize: vertical;
+}
+.element-prompt strong {
+  overflow-wrap: anywhere;
+}

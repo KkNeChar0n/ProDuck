@@ -10,6 +10,7 @@ const state = {
   highlighted: null as HTMLElement | null,
   outline: "",
 };
+const pending: NonNullable<typeof state.selected>[] = [];
 const targets = () => [
   ...document.querySelectorAll<HTMLElement>("[data-produck-id]"),
 ];
@@ -64,6 +65,7 @@ window.addEventListener(
             page: document.title,
           }
         : null;
+    if (state.selected && pending.length < 100) pending.push(state.selected);
     if (target) {
       state.highlighted = target;
       state.outline = target.style.outline;
@@ -79,6 +81,9 @@ const api = {
   },
   selection() {
     return state.selected;
+  },
+  takeSelections() {
+    return pending.splice(0);
   },
   capture() {
     return {

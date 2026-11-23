@@ -1,3 +1,4 @@
+import type { ElementSelection } from "../../contracts/workbench";
 import type { PrototypeContext } from "./Workbench";
 import { useEffect, useState } from "react";
 import { desktop, errorText } from "../bridge";
@@ -20,6 +21,32 @@ export function AgentPanel({
     [prompt, setPrompt] = useState(""),
     [running, setRunning] = useState(false),
     [error, setError] = useState("");
+  const [targets, setTargets] = useState<
+    { element: ElementSelection; prompt: string }[]
+  >([]);
+  useEffect(() => {
+    setTargets([]);
+    setPrompt("");
+  }, [prototypeContext?.versionId]);
+  useEffect(() => {
+    if (!prototypeContext?.picks.length) return;
+    setTargets((items) => {
+      const next = [...items];
+      for (const element of prototypeContext.picks) {
+        if (
+          !next.some((item) => item.element.id === element.id) &&
+          next.length < 12
+        )
+          next.push({ element, prompt: "" });
+      }
+      return next;
+    });
+  }, [prototypeContext?.picks]);
+  const canSend =
+    !!project &&
+    (targets.length
+      ? targets.every((item) => item.prompt.trim())
+      : !!prompt.trim());
   useEffect(() => {
     if (!project) return;
     return desktop().models.onDelta((delta) => {
@@ -41,14 +68,25 @@ export function AgentPanel({
     [project?.id],
   );
   async function send() {
-    if (!project || !prompt.trim() || running) return;
+    if (!project || !canSend || running) return;
     setError("");
     const requestId = crypto.randomUUID(),
       text = prompt;
-    setPrompt("");
+    const submittedTargets = targets;
     setMessages((items) => [
       ...items,
-      { id: crypto.randomUUID(), role: "user", text },
+      {
+        id: crypto.randomUUID(),
+        role: "user",
+        text: [
+          text,
+          ...submittedTargets.map(
+            (item, i) => `${i + 1}. #${item.element.id}：${item.prompt}`,
+          ),
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      },
       { id: requestId, role: "assistant", text: "" },
     ]);
     setRunning(true);
@@ -59,7 +97,17 @@ export function AgentPanel({
           prototypeContext.captureId,
           text,
           prototypeContext.versionId,
-          prototypeContext.element?.id,
+          undefined,
+          submittedTargets.length
+            ? {
+                baselineId: prototypeContext.versionId,
+                contentHash: prototypeContext.contentHash,
+                items: submittedTargets.map((item) => ({
+                  elementId: item.element.id,
+                  prompt: item.prompt,
+                })),
+              }
+            : undefined,
         );
         setMessages((items) =>
           items.map((m) =>
@@ -69,6 +117,8 @@ export function AgentPanel({
           ),
         );
       } else await desktop().models.stream(project.id, requestId, text);
+      setPrompt("");
+      setTargets([]);
     } catch (error) {
       setError(errorText(error));
       setMessages((items) =>
@@ -139,6 +189,78 @@ export function AgentPanel({
           {prototypeContext?.element &&
             ` · ${prototypeContext.element.tag} #${prototypeContext.element.id}`}
         </div>
+        {prototypeContext && (
+          <section className="element-editor">
+            <div className="element-editor-heading">
+              <strong>调整原型</strong>
+              <button
+                type="button"
+                disabled={running}
+                aria-label="元素拾取器"
+                aria-pressed={prototypeContext.picking}
+                onClick={() =>
+                  void prototypeContext
+                    .togglePicker()
+                    .catch((e) => setError(errorText(e)))
+                }
+              >
+                {prototypeContext.picking ? "结束拾取" : "⌖ 拾取元素"}
+              </button>
+            </div>
+            <small>
+              点击原型后逐条填写，最多 12 处，一起提交。切换原型将清空选择。
+            </small>
+            <div className="element-prompt-list">
+              {targets.map((item, index) => (
+                <div className="element-prompt" key={item.element.id}>
+                  <div>
+                    <strong>
+                      {index + 1}.{" "}
+                      {item.element.text.slice(0, 45) || item.element.tag}
+                    </strong>
+                    <button
+                      type="button"
+                      disabled={running}
+                      aria-label={`移除元素 ${index + 1}`}
+                      onClick={() =>
+                        setTargets((items) =>
+                          items.filter((x) => x.element.id !== item.element.id),
+                        )
+                      }
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <small title={item.element.id}>
+                    {item.element.tag} · #{item.element.id}
+                  </small>
+                  <textarea
+                    aria-label={`元素 ${index + 1} 修改要求`}
+                    placeholder="仅针对这个元素的修改要求…"
+                    rows={2}
+                    maxLength={2000}
+                    disabled={running}
+                    value={item.prompt}
+                    onChange={(e) =>
+                      setTargets((items) =>
+                        items.map((x) =>
+                          x.element.id === item.element.id
+                            ? { ...x, prompt: e.target.value }
+                            : x,
+                        ),
+                      )
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+            {!!targets.length && (
+              <small>
+                已选 {targets.length}/12 处 · 每处都填写后可统一提交
+              </small>
+            )}
+          </section>
+        )}
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -152,10 +274,13 @@ export function AgentPanel({
             disabled={!project || running}
             placeholder={
               prototypeContext
-                ? "描述你希望如何调整当前页面…"
+                ? targets.length
+                  ? "整体补充要求（可选）…"
+                  : "描述你希望如何调整当前页面…"
                 : "描述你的产品问题…"
             }
-            rows={4}
+            rows={targets.length ? 2 : 4}
+            maxLength={3000}
           />
           <div className="composer-actions">
             <small>
@@ -178,11 +303,11 @@ export function AgentPanel({
               </button>
             ) : (
               <button
-                className="send"
+                className={targets.length ? "primary" : "send"}
                 aria-label="发送修改要求"
-                disabled={!project || !prompt.trim()}
+                disabled={!canSend}
               >
-                ↑
+                {targets.length ? `提交 ${targets.length} 处` : "↑"}
               </button>
             )}
           </div>

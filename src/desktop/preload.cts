@@ -163,6 +163,8 @@ contextBridge.exposeInMainWorld(
       selectionMode: (id: string, enabled: boolean) =>
         ipcRenderer.invoke("prototypes:selection-mode", id, enabled),
       selection: (id: string) => ipcRenderer.invoke("prototypes:selection", id),
+      takeSelections: (id: string, versionId: string) =>
+        ipcRenderer.invoke("prototypes:take-selections", id, versionId),
       versions: (id: string) => ipcRenderer.invoke("prototypes:list", id),
       generate: (
         id: string,
@@ -170,6 +172,7 @@ contextBridge.exposeInMainWorld(
         change?: string,
         baselineId?: string,
         elementId?: string,
+        batch?: import("../contracts/workbench.js").ElementPromptBatch,
       ) =>
         ipcRenderer.invoke(
           "prototypes:generate",
@@ -178,6 +181,7 @@ contextBridge.exposeInMainWorld(
           change,
           baselineId,
           elementId,
+          batch,
         ),
       cancel: (id: string) => ipcRenderer.invoke("prototypes:cancel", id),
       details: (id: string, versionId: string) =>

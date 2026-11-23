@@ -89,7 +89,7 @@ python3 tests/prototype_smoke.py
 npm run package:mac
 ```
 
-输出 `release/Produck-0.1.15-arm64-test.dmg`，包含 Electron、编译后的钥匙串程序与应用资源。目标最低系统为 macOS 13，当前只在 macOS 26.3 arm64 上构建和检查；尚未在最低系统或无开发工具的机器完成验收。
+输出 `release/Produck-0.1.16-arm64-test.dmg`，包含 Electron、编译后的钥匙串程序与应用资源。目标最低系统为 macOS 13，当前只在 macOS 26.3 arm64 上构建和检查；尚未在最低系统或无开发工具的机器完成验收。
 
 包使用临时签名，未完成 Developer ID 签名和公证，不用于公开分发。安装包未提交 Git；第三方运行组件许可证随包保存。打包验证不代表真实模型与平台集成已通过。
 
@@ -106,3 +106,7 @@ npm run package:mac
 当前功能边界、剩余验收条件与记录模板集中在 [首版验收清单](docs/verification/release-readiness.md)。运行组件许可扫描记录可通过 `node scripts/audit-runtime-licenses.mjs` 更新；已补充对应 Python 完整构建元数据引用的原生组件许可文本，正式签名与公证仍待完成。
 
 云效连接新配置默认选择 AccessKey（AK）：填写 AccessKey ID 与 Secret 后保存，二者均进入系统钥匙串。原 PAT 配置继续可用；切换认证方式需要重新填写凭证。AK 使用官方 2021-06-25 API 的杭州端点，无需安装 SDK 或 CLI。详见 [AK 验证记录](docs/verification/yunxiao-ak.md)。
+
+### 原型多处调整
+
+在「工作台 → 原型」右侧点击「拾取元素」，依次点击目标，并为每处填写独立要求，最后点击「提交 N 处」。可选择最多 12 处，一次生成新候选。切换原型清空选择；失败保留输入。左侧顶部可收起，标题栏左上角可展开。交接文档在「工作台 → 交接资料」导入；「工作流」用于执行及恢复多步骤任务。详见 [验收记录](docs/verification/element-prompts.md)。

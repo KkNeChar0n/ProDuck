@@ -26,6 +26,11 @@ export function TaskHistory({ projectId }: { projectId: string }) {
   }, [projectId]);
   return (
     <>
+      <p className="muted">
+        工作流用于运行多步骤 Agent
+        任务、确认待执行操作，以及查看和恢复中断记录。交接文档请到「工作台 →
+        交接资料」导入。
+      </p>
       <AgentTasks projectId={projectId} />
       <article className="paper">
         <h2>原型生成记录</h2>

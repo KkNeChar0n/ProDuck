@@ -193,3 +193,49 @@ export function prototypeChanges(before: string, after: string) {
     sourceChanged: before !== after,
   };
 }
+
+/** Validate immutable target bindings without running prototype scripts. */
+export function validateElementBatch(
+  value: import("../contracts/workbench.js").ElementPromptBatch,
+  baselineId: string | undefined,
+  html: string | undefined,
+): import("../contracts/workbench.js").ElementPromptBatch {
+  if (
+    !value ||
+    !html ||
+    !baselineId ||
+    value.baselineId !== baselineId ||
+    value.contentHash !== createHash("sha256").update(html).digest("hex")
+  )
+    throw new Error("原型版本已变化，请在目标版本重新选择元素");
+  if (
+    !Array.isArray(value.items) ||
+    !value.items.length ||
+    value.items.length > 12
+  )
+    throw new Error("每次请选择 1–12 个元素");
+  const nodes = elements(parse(html));
+  const seen = new Set<string>();
+  const items = value.items.map((item) => {
+    if (
+      !item ||
+      typeof item.elementId !== "string" ||
+      !validId(item.elementId) ||
+      seen.has(item.elementId) ||
+      nodes.filter((el) => attr(el, "data-produck-id") === item.elementId)
+        .length !== 1
+    )
+      throw new Error(
+        "目标元素不存在、重复或不唯一；动态元素请选择其固定父区域",
+      );
+    if (
+      typeof item.prompt !== "string" ||
+      !item.prompt.trim() ||
+      item.prompt.length > 2000
+    )
+      throw new Error("每个元素需要填写 1–2000 字修改要求");
+    seen.add(item.elementId);
+    return { elementId: item.elementId, prompt: item.prompt.trim() };
+  });
+  return { baselineId, contentHash: value.contentHash, items };
+}

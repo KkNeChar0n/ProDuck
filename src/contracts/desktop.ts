@@ -190,6 +190,7 @@ export interface DesktopBridge {
     ): Promise<PrototypeComparison>;
     selectionMode(id: string, enabled: boolean): Promise<void>;
     selection(id: string): Promise<ElementSelection | null>;
+    takeSelections(id: string, versionId: string): Promise<ElementSelection[]>;
     versions(id: string): Promise<PrototypeVersion[]>;
     generate(
       id: string,
@@ -197,6 +198,7 @@ export interface DesktopBridge {
       change?: string,
       baselineId?: string,
       elementId?: string,
+      batch?: import("./workbench.js").ElementPromptBatch,
     ): Promise<PrototypeVersion>;
     cancel(id: string): Promise<void>;
     loadPrototype(id: string, versionId: string): Promise<RestoreResult | null>;

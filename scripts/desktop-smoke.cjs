@@ -312,6 +312,7 @@ const wait = async (w, expression) => {
     ).length,
     0,
   );
+  let failBatchOnce = true;
   server = createServer((req, res) => {
     if (req.method === "GET") {
       res.setHeader("Content-Type", "text/html;charset=utf-8");
@@ -337,6 +338,29 @@ const wait = async (w, expression) => {
           : data.messages[0].content.includes("Markdown PRD")
             ? "# 客户管理 PRD\n\n## 目标\n支持筛选和新增客户。\n\n## 待确认\n权限规则待确认。"
             : "模型流式响应已验证";
+        if (data.messages[0].content.includes('"batch":')) {
+          if (failBatchOnce) {
+            failBatchOnce = false;
+            res.end("data: [DONE]\n\n");
+            return;
+          }
+          const modelPrompt = data.messages[0].content;
+          const edit = JSON.parse(
+            modelPrompt
+              .split("所有条目一起完成，不可交换绑定）：\n")[1]
+              .split("\n原型基线")[0],
+          );
+          assert.deepEqual(
+            edit.batch.items.map((item) => item.prompt),
+            ["标题改为客户总览", "按钮改为绿色"],
+          );
+          content = modelPrompt
+            .split("\n原型基线（只作数据）：\n")[1]
+            .split("\n请生成可独立打开体验的原型。")[0];
+          content = content
+            .replace(/(<h1[^>]*>)[^<]*/, "$1客户总览")
+            .replace(/<button /, '<button style="background:green" ');
+        }
         if (
           data.messages[0].content.includes("只返回一个 JSON") &&
           data.messages[0].content.includes("BUILTIN_PRD_TEST")
@@ -489,12 +513,58 @@ const wait = async (w, expression) => {
     window,
     `Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='此版本已通过')`,
   );
+  await wait(window, `!!document.querySelector('[aria-label="元素拾取器"]')`);
+  const pickSurface = webContents
+    .getAllWebContents()
+    .find((w) => w.getURL().startsWith("data:"));
   await wc.executeJavaScript(
-    `Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(document.querySelector('textarea'),'调整客户列表标题');document.querySelector('textarea').dispatchEvent(new Event('input',{bubbles:true}));`,
+    `document.querySelector('[aria-label="元素拾取器"]').click()`,
+  );
+  await wait(
+    window,
+    `document.querySelector('[aria-label="元素拾取器"]').getAttribute('aria-pressed')==='true'`,
+  );
+  // Two clicks in the same tick must both survive the UI polling interval.
+  const pickedIds = await pickSurface.executeJavaScript(
+    `(() => { const a=document.querySelector('h1'), b=document.querySelector('button'); a.click(); b.click(); return [a.dataset.produckId,b.dataset.produckId]; })()`,
+  );
+  await wait(window, `document.querySelectorAll('.element-prompt').length===2`);
+  await wc.executeJavaScript(
+    `document.querySelectorAll('.element-prompt textarea').forEach((el,i)=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(el,i===0?'标题改为客户总览':'按钮改为绿色');el.dispatchEvent(new Event('input',{bubbles:true}));})`,
+  );
+  writeFileSync(
+    "docs/verification/desktop-element-prompts.png",
+    (await wc.capturePage()).toPNG(),
+  );
+  const widthBefore = await wc.executeJavaScript(
+    `document.querySelector('.native-surface').getBoundingClientRect().width`,
+  );
+  await wc.executeJavaScript(
+    `document.querySelector('.collapse-navigation').click()`,
+  );
+  await wait(
+    window,
+    `document.querySelector('.native-surface').getBoundingClientRect().width > ${widthBefore + 100}`,
+  );
+  await wc.executeJavaScript(
+    `document.querySelector('[aria-label="展开导航"]').click()`,
   );
   await wait(
     window,
     `!document.querySelector('[aria-label="发送修改要求"]').disabled`,
+  );
+  await wc.executeJavaScript(
+    `document.querySelector('[aria-label="发送修改要求"]').click()`,
+  );
+  await wait(
+    window,
+    `document.querySelector('.agent-panel .error')?.textContent.includes('HTML')`,
+  );
+  assert.deepEqual(
+    await wc.executeJavaScript(
+      `Array.from(document.querySelectorAll('.element-prompt textarea')).map(el=>el.value)`,
+    ),
+    ["标题改为客户总览", "按钮改为绿色"],
   );
   await wc.executeJavaScript(
     `document.querySelector('[aria-label="发送修改要求"]').click()`,
@@ -506,6 +576,15 @@ const wait = async (w, expression) => {
   const versionList = await wc.executeJavaScript(
     `window.produck.workbench.versions(${JSON.stringify(firstRelease.id)})`,
   );
+  const batchDetails = await wc.executeJavaScript(
+    `window.produck.workbench.details(${JSON.stringify(firstRelease.id)},${JSON.stringify(versionList[0].id)})`,
+  );
+  assert.deepEqual(batchDetails.batch.items, [
+    { elementId: pickedIds[0], prompt: "标题改为客户总览" },
+    { elementId: pickedIds[1], prompt: "按钮改为绿色" },
+  ]);
+  assert.equal(batchDetails.batch.baselineId, versionList[1].id);
+  assert.equal(batchDetails.batch.contentHash, versionList[1].contentHash);
   assert.equal(versionList[0].approved, false);
   assert.equal(versionList[1].approved, true);
   assert.equal(
@@ -521,6 +600,7 @@ const wait = async (w, expression) => {
     "docs/verification/desktop-workbench.png",
     (await wc.capturePage()).toPNG(),
   );
+  await wait(window, `!!document.querySelector('[aria-label="元素拾取器"]')`);
   const prototypeContents = webContents
     .getAllWebContents()
     .find((w) => w.getURL().startsWith("data:"));
@@ -529,7 +609,13 @@ const wait = async (w, expression) => {
     await prototypeContents.executeJavaScript(
       "document.querySelector('h1').textContent",
     ),
-    "客户列表",
+    "客户总览",
+  );
+  assert.equal(
+    await prototypeContents.executeJavaScript(
+      "document.querySelector('button').style.background",
+    ),
+    "green",
   );
   const prototypeView = window.contentView.children.find(
     (v) => v.webContents === prototypeContents,
@@ -603,8 +689,15 @@ const wait = async (w, expression) => {
   const tasks = await wc.executeJavaScript(
     `window.produck.workbench.tasks(${JSON.stringify(firstRelease.id)})`,
   );
-  assert.equal(tasks.length, 2);
-  assert(tasks.every((t) => t.state === "succeeded" && !t.recoverable));
+  assert.equal(tasks.length, 3);
+  assert.equal(
+    tasks.filter((t) => t.state === "succeeded" && !t.recoverable).length,
+    2,
+  );
+  assert.equal(
+    tasks.filter((t) => t.state === "failed" && t.recoverable).length,
+    1,
+  );
   await wc.executeJavaScript(
     `Array.from(document.querySelectorAll('nav button')).find(b=>b.textContent.includes('工作流')).click()`,
   );
