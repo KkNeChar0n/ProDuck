@@ -97,7 +97,7 @@ export class YunxiaoSyncWorkflow {
         return previous;
       const client = await this.connect(id),
         item = await client.item(itemId),
-        statuses = await client.statuses(item.typeId),
+        statuses = await client.statuses(item.typeId, item.id),
         target = statuses.find((s) => s.id === config.statusMapping!.published);
       if (item.projectId !== config.projectId || !target)
         throw new Error("项目不匹配或映射状态不在该工作项类型的工作流中");
@@ -177,7 +177,7 @@ export class YunxiaoSyncWorkflow {
         this.save(id, row, "执行前发生冲突");
         return row;
       }
-      const statuses = await client.statuses(current.typeId);
+      const statuses = await client.statuses(current.typeId, current.id);
       if (
         !statuses.some(
           (s) => s.id === row.target.id && s.name === row.target.name,

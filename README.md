@@ -16,7 +16,7 @@
 - 受控 Agent 多步骤任务、逐项敏感操作批准、取消与中断恢复；可读取资料/记忆、保存笔记和操作网页。
 - 说明型 Skill 导入、相对资源与版本指纹校验、兼容性报告；脚本和未适配宿主工具明确阻止运行。
 - 模型文本/图像/原生工具能力检测，原型元素 ID 保持、基础表单状态恢复及人工交互检查记录。
-- 飞书自建应用 / 云效中心版 PAT 配置、项目隔离钥匙串凭证及只读连接测试；可配置云效状态 ID 映射，首次发布成功后可核对工作项并同步状态。
+- 飞书自建应用 / 云效 AK 与 PAT 配置、项目隔离钥匙串凭证及只读连接测试；可配置云效状态 ID 映射，首次发布成功后可核对工作项并同步状态。
 - 发布前本地审阅包：固定正文、截图和批准原型，核对飞书父节点，绑定材料指纹；确认材料不会执行发布。
 - 飞书首次发布：单独确认后创建需求子文档、维护共用原型附件、上传截图并读回校验正文及文件；保存阶段收据，结果不明时阻止盲目重试。
 - 已发布 PRD 的线上读取、普通文字章节定位和增删差异评审；批准前重新读回检查冲突，尚不执行线上合并。
@@ -89,7 +89,7 @@ python3 tests/prototype_smoke.py
 npm run package:mac
 ```
 
-输出 `release/Produck-0.1.14-arm64-test.dmg`，包含 Electron、编译后的钥匙串程序与应用资源。目标最低系统为 macOS 13，当前只在 macOS 26.3 arm64 上构建和检查；尚未在最低系统或无开发工具的机器完成验收。
+输出 `release/Produck-0.1.15-arm64-test.dmg`，包含 Electron、编译后的钥匙串程序与应用资源。目标最低系统为 macOS 13，当前只在 macOS 26.3 arm64 上构建和检查；尚未在最低系统或无开发工具的机器完成验收。
 
 包使用临时签名，未完成 Developer ID 签名和公证，不用于公开分发。安装包未提交 Git；第三方运行组件许可证随包保存。打包验证不代表真实模型与平台集成已通过。
 
@@ -104,3 +104,5 @@ npm run package:mac
 已支持声明式标准库 Python Skill，运行时随安装包提供。导入 [Python 汇总示例](examples/python-summary)，在 Skills 页填写 JSON 并逐次授权运行；文件和网络范围、依赖限制见 [Python 技能说明](docs/verification/python-skills.md)。
 
 当前功能边界、剩余验收条件与记录模板集中在 [首版验收清单](docs/verification/release-readiness.md)。运行组件许可扫描记录可通过 `node scripts/audit-runtime-licenses.mjs` 更新；已补充对应 Python 完整构建元数据引用的原生组件许可文本，正式签名与公证仍待完成。
+
+云效连接新配置默认选择 AccessKey（AK）：填写 AccessKey ID 与 Secret 后保存，二者均进入系统钥匙串。原 PAT 配置继续可用；切换认证方式需要重新填写凭证。AK 使用官方 2021-06-25 API 的杭州端点，无需安装 SDK 或 CLI。详见 [AK 验证记录](docs/verification/yunxiao-ak.md)。

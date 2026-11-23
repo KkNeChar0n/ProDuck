@@ -3,6 +3,7 @@ export interface PlatformConfig {
   provider: Platform;
   url: string;
   appId?: string;
+  authType?: "ak" | "pat";
   organizationId?: string;
   projectId?: string;
   statusMapping?: { published?: string; merged?: string };
@@ -12,6 +13,7 @@ export interface PlatformProfile extends PlatformConfig {
 }
 export interface PlatformInput extends PlatformConfig {
   secret?: string;
+  accessKeyId?: string;
 }
 export interface ConnectionTest {
   checkedAt: string;

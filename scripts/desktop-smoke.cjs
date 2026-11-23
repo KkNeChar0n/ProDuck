@@ -115,31 +115,80 @@ const wait = async (w, expression) => {
   let yunxiaoWrites = 0;
   let itemStatus = { id: "todo", name: "待开始" };
   globalThis.fetch = (url, init) =>
-    String(url).startsWith("https://openapi-rdc.aliyuncs.com/")
+    String(url).startsWith("https://devops.cn-hangzhou.aliyuncs.com/")
       ? (async () => {
-          if (init?.method === "PUT") {
-            assert.deepEqual(JSON.parse(init.body), { status: "design" });
+          assert(
+            init.headers.Authorization.startsWith(
+              "ACS3-HMAC-SHA256 Credential=synthetic-ak-id,",
+            ),
+          );
+          if (init.method === "POST") {
+            assert.deepEqual(JSON.parse(init.body), {
+              identifier: "item",
+              fieldType: "status",
+              propertyKey: "status",
+              propertyValue: "design",
+            });
             yunxiaoWrites++;
             itemStatus = { id: "design", name: "设计中" };
-            return new Response(null, { status: 204 });
+            return Response.json({ success: true });
           }
-          if (String(url).endsWith("/workflows"))
+          if (String(url).endsWith("/getWorkflowInfo"))
             return Response.json({
-              statuses: [{ id: "design", name: "设计中" }],
+              success: true,
+              workflow: {
+                statuses: [{ identifier: "design", name: "设计中" }],
+              },
+            });
+          if (String(url).endsWith("/project/proj"))
+            return Response.json({
+              success: true,
+              project: {
+                identifier: "proj",
+                organizationIdentifier: "org",
+                logicalStatus: "NORMAL",
+                name: "模拟项目",
+              },
             });
           return Response.json({
-            id: "item",
-            subject: "模拟云效需求",
-            logicalStatus: "normal",
-            space: { id: "proj" },
-            workitemType: { id: "requirement" },
-            status: itemStatus,
-            updateStatusAt: "1",
+            success: true,
+            workitem: {
+              identifier: "item",
+              subject: "模拟云效需求",
+              logicalStatus: "NORMAL",
+              spaceIdentifier: "proj",
+              workitemTypeIdentifier: "requirement",
+              statusIdentifier: itemStatus.id,
+              status: itemStatus.name,
+              updateStatusAt: 1,
+            },
           });
         })()
-      : String(url).startsWith("https://open.feishu.cn/")
-        ? feishuFixture.fetch(url, init)
-        : originalFetch(url, init);
+      : String(url).startsWith("https://openapi-rdc.aliyuncs.com/")
+        ? (async () => {
+            if (init?.method === "PUT") {
+              assert.deepEqual(JSON.parse(init.body), { status: "design" });
+              yunxiaoWrites++;
+              itemStatus = { id: "design", name: "设计中" };
+              return new Response(null, { status: 204 });
+            }
+            if (String(url).endsWith("/workflows"))
+              return Response.json({
+                statuses: [{ id: "design", name: "设计中" }],
+              });
+            return Response.json({
+              id: "item",
+              subject: "模拟云效需求",
+              logicalStatus: "normal",
+              space: { id: "proj" },
+              workitemType: { id: "requirement" },
+              status: itemStatus,
+              updateStatusAt: "1",
+            });
+          })()
+        : String(url).startsWith("https://open.feishu.cn/")
+          ? feishuFixture.fetch(url, init)
+          : originalFetch(url, init);
   dialog.showMessageBox = async (_window, options) => {
     assert(
       options.buttons.includes("确认发布到飞书") ||
@@ -771,7 +820,7 @@ const wait = async (w, expression) => {
   assert(published[0].steps.every((s) => s.state === "done"));
   assert.equal(feishuFixture.nodes.length, 2);
   await wc.executeJavaScript(
-    `window.produck.platforms.save(${JSON.stringify(first.id)}, {provider:'yunxiao',url:'https://devops.aliyun.com/proj',organizationId:'org',projectId:'proj',statusMapping:{published:'design'},secret:'synthetic-yunxiao-token'})`,
+    `window.produck.platforms.save(${JSON.stringify(first.id)}, {provider:'yunxiao',url:'https://devops.aliyun.com/proj',organizationId:'org',projectId:'proj',authType:'ak',accessKeyId:'synthetic-ak-id',statusMapping:{published:'design'},secret:'synthetic-ak-secret'})`,
   );
   const yunxiaoDb = new DatabaseSync(join(root, "profile", "projects.sqlite"));
   yunxiaoCredentialRef = yunxiaoDb
@@ -780,6 +829,11 @@ const wait = async (w, expression) => {
     )
     .get(first.id).credential_ref;
   yunxiaoDb.close();
+  const akTest = await wc.executeJavaScript(
+    `window.produck.platforms.test(${JSON.stringify(first.id)},'yunxiao')`,
+  );
+  assert.equal(akTest.title, "模拟项目");
+
   await wc.executeJavaScript(
     `Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(document.querySelector('[aria-label="云效工作项 ID"]'),'item');document.querySelector('[aria-label="云效工作项 ID"]').dispatchEvent(new Event('input',{bubbles:true}))`,
   );

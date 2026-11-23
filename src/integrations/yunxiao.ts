@@ -6,7 +6,7 @@ const identifier = (value: unknown): string => {
 };
 export interface YunxiaoPort {
   item(id: string): Promise<Workitem>;
-  statuses(typeId: string): Promise<WorkitemState[]>;
+  statuses(typeId: string, itemId?: string): Promise<WorkitemState[]>;
   setStatus(id: string, statusId: string): Promise<void>;
 }
 export class YunxiaoClient implements YunxiaoPort {

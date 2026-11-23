@@ -9,6 +9,8 @@ export function PlatformSettings({
   provider: Platform;
 }) {
   const [profile, setProfile] = useState<PlatformProfile | null>(null),
+    [authType, setAuthType] = useState<"ak" | "pat">("ak"),
+    [dirty, setDirty] = useState(false),
     [loaded, setLoaded] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
@@ -20,6 +22,7 @@ export function PlatformSettings({
       .then((value) => {
         if (active) {
           setProfile(value);
+          setAuthType(value?.authType ?? (value ? "pat" : "ak"));
           setLoaded(true);
         }
       })
@@ -44,6 +47,8 @@ export function PlatformSettings({
         ...(provider === "feishu"
           ? { appId: value("appId") }
           : {
+              authType,
+              accessKeyId: value("accessKeyId") || undefined,
               organizationId: value("organizationId"),
               projectId: value("projectId"),
               statusMapping: {
@@ -53,6 +58,11 @@ export function PlatformSettings({
             }),
       });
       setProfile(next);
+      setDirty(false);
+      const ak = form.elements.namedItem(
+        "accessKeyId",
+      ) as HTMLInputElement | null;
+      if (ak) ak.value = "";
       (form.elements.namedItem("secret") as HTMLInputElement).value = "";
       setNotice("配置已保存，凭证已存入钥匙串。请测试已保存配置。");
     } catch (e) {
@@ -83,12 +93,16 @@ export function PlatformSettings({
       <h3>
         {provider === "feishu"
           ? "飞书应用凭证（项目共享）"
-          : "云效中心版（项目共享）"}
+          : "云效连接（项目共享）"}
       </h3>
       {loaded && (
         <form
           className="connection-form"
-          onChange={() => setNotice("")}
+          onChange={() => {
+            setNotice("");
+            setError("");
+            setDirty(true);
+          }}
           onSubmit={(e) => {
             e.preventDefault();
             void save(e.currentTarget);
@@ -139,13 +153,52 @@ export function PlatformSettings({
                 </label>
               </>
             )}
+            {provider === "yunxiao" && (
+              <>
+                <label>
+                  认证方式
+                  <select
+                    value={authType}
+                    onChange={(e) =>
+                      setAuthType(e.target.value as "ak" | "pat")
+                    }
+                  >
+                    <option value="ak">AccessKey（AK）</option>
+                    <option value="pat">个人访问令牌（PAT）</option>
+                  </select>
+                </label>
+                {authType === "ak" && (
+                  <label>
+                    AccessKey ID
+                    <input
+                      name="accessKeyId"
+                      type="password"
+                      autoComplete="new-password"
+                      placeholder={
+                        profile?.hasCredential && profile.authType === "ak"
+                          ? "已保存；更换时同时填写 ID 和 Secret"
+                          : "填写 AccessKey ID"
+                      }
+                    />
+                  </label>
+                )}
+              </>
+            )}
             <label>
-              {provider === "feishu" ? "App Secret" : "个人访问令牌（PAT）"}
+              {provider === "feishu"
+                ? "App Secret"
+                : authType === "ak"
+                  ? "AccessKey Secret"
+                  : "个人访问令牌（PAT）"}
               <input
                 name="secret"
                 type="password"
                 autoComplete="new-password"
-                required={!profile?.hasCredential}
+                required={
+                  !profile?.hasCredential ||
+                  (provider === "yunxiao" &&
+                    authType !== (profile.authType ?? "pat"))
+                }
                 placeholder={
                   profile?.hasCredential
                     ? "已保存；留空保留，更换凭证时填写"
@@ -156,8 +209,10 @@ export function PlatformSettings({
             {provider === "yunxiao" && (
               <>
                 <p className="muted">
-                  当前使用中心版 PAT，不支持旧版 AccessKey 或 Region
-                  版。以下状态 ID 可留空；不会自动推断“已完成”。
+                  {authType === "ak"
+                    ? "使用 AccessKey ID / Secret 访问云效杭州端点，凭证保存在钥匙串。"
+                    : "使用云效中心版个人访问令牌。"}
+                  以下状态 ID 可留空；不会自动推断“已完成”。
                 </p>
                 <label>
                   首次发布成功后 → 状态 ID
@@ -180,7 +235,7 @@ export function PlatformSettings({
             <button type="submit">保存连接</button>{" "}
             <button
               type="button"
-              disabled={!profile?.hasCredential}
+              disabled={!profile?.hasCredential || dirty}
               onClick={() => void test()}
             >
               测试已保存连接
@@ -193,6 +248,7 @@ export function PlatformSettings({
           应用凭证由项目共享。迭代父节点地址请在版本设置填写；测试不会创建文档。
         </p>
       )}
+      {dirty && <p className="muted">配置已修改，请先保存连接，再测试。</p>}
       {error && (
         <p className="error" role="alert">
           {error}

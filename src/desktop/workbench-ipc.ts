@@ -1,6 +1,5 @@
 import { deliveryTools } from "../agent/delivery-tools.js";
 import { productTools } from "../agent/product-tools.js";
-import { YunxiaoClient } from "../integrations/yunxiao.js";
 import { YunxiaoSyncWorkflow } from "../workflows/yunxiao-sync.js";
 import { DocumentReviews } from "../workflows/document-review.js";
 import { PublicationWorkflow } from "../workflows/publication.js";
@@ -88,18 +87,8 @@ export function registerWorkbenchIpc(
       reviews,
       async (id) => new FeishuClient((await platforms.feishuSession(id)).token),
     );
-    const sync = new YunxiaoSyncWorkflow(
-      projects,
-      publisher,
-      platforms,
-      async (id) => {
-        const { config, token } = await platforms.yunxiaoSession(id);
-        return new YunxiaoClient(
-          config.organizationId!,
-          config.projectId!,
-          token,
-        );
-      },
+    const sync = new YunxiaoSyncWorkflow(projects, publisher, platforms, (id) =>
+      platforms.yunxiaoClient(id),
     );
     ipcMain.handle("yunxiao-sync:list", (e, id: string) => {
       trusted(e, id);

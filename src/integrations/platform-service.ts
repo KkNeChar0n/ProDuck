@@ -1,3 +1,5 @@
+import { YunxiaoAkClient } from "./yunxiao-ak.js";
+import { YunxiaoClient } from "./yunxiao.js";
 import { owningProject } from "../projects/releases.js";
 import type { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
@@ -53,6 +55,8 @@ function validate(input: PlatformInput): PlatformConfig {
   }
   if (url.hostname !== "devops.aliyun.com")
     throw new Error("当前支持云效中心版，请填写 devops.aliyun.com 项目地址");
+  if (input.authType !== undefined && !["ak", "pat"].includes(input.authType))
+    throw new Error("云效认证方式无效");
   const statusMapping: PlatformConfig["statusMapping"] = {};
   for (const phase of ["published", "merged"] as const) {
     const value = input.statusMapping?.[phase];
@@ -60,6 +64,7 @@ function validate(input: PlatformInput): PlatformConfig {
   }
   return {
     provider: "yunxiao",
+    ...(input.authType ? { authType: input.authType } : {}),
     url: url.href,
     organizationId: identifier(input.organizationId, "组织 ID"),
     projectId: identifier(input.projectId, "项目 ID"),
@@ -126,10 +131,30 @@ export class PlatformService {
       !input.secret
     )
       throw new Error("更换 App ID 时需要重新填写 App Secret");
+    const oldAuth = previous?.authType ?? "pat",
+      nextAuth = config.authType ?? "pat";
+    if (
+      config.provider === "yunxiao" &&
+      old?.credential_ref &&
+      oldAuth !== nextAuth &&
+      !input.secret
+    )
+      throw new Error("切换认证方式时请重新填写对应凭证");
+    let credential = input.secret;
+    if (config.provider === "yunxiao" && nextAuth === "ak") {
+      if (input.accessKeyId || input.secret) {
+        if (!input.accessKeyId || !input.secret)
+          throw new Error("更换 AK 时请同时填写 AccessKey ID 和 Secret");
+        credential = JSON.stringify({
+          accessKeyId: identifier(input.accessKeyId, "AccessKey ID"),
+          accessKeySecret: input.secret,
+        });
+      }
+    }
     let reference = old?.credential_ref ? String(old.credential_ref) : null;
     if (input.secret) {
       reference = randomUUID();
-      await this.credentials.set(reference, input.secret);
+      await this.credentials.set(reference, credential!);
     }
     if (!reference) throw new Error("首次配置请填写平台凭证");
     try {
@@ -198,6 +223,30 @@ export class PlatformService {
     if (JSON.stringify(this.row(id, "yunxiao")) !== JSON.stringify(row))
       throw new Error("云效配置已变化");
     return { config, token };
+  }
+  async yunxiaoClient(id: string) {
+    const { config, token } = await this.yunxiaoSession(id);
+    if (config.authType === "ak") {
+      let pair;
+      try {
+        pair = JSON.parse(token);
+      } catch {
+        throw new Error("AK 凭证无效，请重新保存");
+      }
+      return new YunxiaoAkClient(
+        config.organizationId!,
+        config.projectId!,
+        pair.accessKeyId,
+        pair.accessKeySecret,
+        this.transport,
+      );
+    }
+    return new YunxiaoClient(
+      config.organizationId!,
+      config.projectId!,
+      token,
+      this.transport,
+    );
   }
   async feishuSession(id: string) {
     const row = this.row(id, "feishu");
@@ -282,10 +331,13 @@ export class PlatformService {
       targetId = node.node_token;
       title = node.title;
     } else {
-      const result = await this.request(
-        `https://openapi-rdc.aliyuncs.com/oapi/v1/projex/organizations/${config.organizationId}/projects/${config.projectId}`,
-        { headers: { "x-yunxiao-token": secret } },
-      );
+      const result =
+        config.authType === "ak"
+          ? await ((await this.yunxiaoClient(id)) as YunxiaoAkClient).project()
+          : await this.request(
+              `https://openapi-rdc.aliyuncs.com/oapi/v1/projex/organizations/${config.organizationId}/projects/${config.projectId}`,
+              { headers: { "x-yunxiao-token": secret } },
+            );
       if (result.id !== config.projectId || typeof result.name !== "string")
         throw new Error("云效返回项目不匹配，请检查中心版组织及项目 ID");
       targetId = result.id;
