@@ -1,3 +1,6 @@
+import { join } from "node:path";
+import { ChromeDiscoveryBrowser } from "../discovery/chrome.js";
+import { DiscoveryService, discoveryModel } from "../discovery/service.js";
 import { deliveryTools } from "../agent/delivery-tools.js";
 import { productTools } from "../agent/product-tools.js";
 import { YunxiaoSyncWorkflow } from "../workflows/yunxiao-sync.js";
@@ -16,6 +19,7 @@ import { registerAgentIpc } from "./agent-ipc.js";
 import { DocumentWorkflow } from "../workflows/documents.js";
 import { atomicWrite } from "../projects/storage.js";
 import {
+  app,
   dialog,
   ipcMain,
   shell,
@@ -45,6 +49,69 @@ export function registerWorkbenchIpc(
     preview = new PrototypeSurface(getWindow),
     versions = new PrototypeRepository(db, projects),
     generator = new PrototypeGenerator(db, projects, models, versions);
+  const discovery = new DiscoveryService(
+    projects,
+    new ChromeDiscoveryBrowser(
+      join(app.getPath("userData"), "chrome-profiles"),
+    ),
+    discoveryModel(models),
+  );
+  ipcMain.handle("discovery:open", (e, id: string, url: string) => {
+    trusted(e, id);
+    return discovery.open(id, url);
+  });
+  ipcMain.handle("discovery:state", (e, id: string) => {
+    trusted(e, id);
+    return discovery.state(id);
+  });
+  ipcMain.handle(
+    "discovery:start",
+    (e, id: string, goal: string, budget: number) => {
+      trusted(e, id);
+      return discovery.start(id, goal, budget);
+    },
+  );
+  ipcMain.handle("discovery:resume", (e, id: string, runId: string) => {
+    trusted(e, id);
+    return discovery.resume(id, runId);
+  });
+  ipcMain.handle("discovery:summarize", (e, id: string, runId: string) => {
+    trusted(e, id);
+    return discovery.resume(id, runId, true);
+  });
+  ipcMain.handle("discovery:cancel", (e, id: string) => {
+    trusted(e, id);
+    return discovery.cancel(id);
+  });
+  ipcMain.handle(
+    "discovery:revise",
+    (e, id: string, reportId: string, digest: string, markdown: string) => {
+      trusted(e, id);
+      return discovery.memory.revise(id, reportId, digest, markdown);
+    },
+  );
+  ipcMain.handle(
+    "discovery:approve",
+    (e, id: string, reportId: string, digest: string) => {
+      trusted(e, id);
+      return discovery.memory.approve(id, reportId, digest);
+    },
+  );
+  ipcMain.handle(
+    "discovery:generate",
+    (e, id: string, reportId: string, digest: string) => {
+      trusted(e, id);
+      const report = discovery.memory.get(id, reportId, digest, true);
+      return generator.generate(
+        id,
+        report.captureIds[0],
+        notify(e),
+        "依据已审核理解，生成包含各模块入口和模拟流程的统一可操作原型",
+        undefined,
+        { understanding: { id: report.id, digest: report.digest } },
+      );
+    },
+  );
   const documents = new DocumentWorkflow(projects, versions, models);
   const tools = new ToolRegistry(
     projects,
@@ -473,11 +540,12 @@ export function registerWorkbenchIpc(
     atomicWrite(result.filePath, html);
     return true;
   });
-  return () => {
+  return async () => {
     agent.close();
     documents.close();
     generator.close();
     browser.close();
     preview.close();
+    await discovery.close();
   };
 }

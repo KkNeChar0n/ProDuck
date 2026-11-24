@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import { desktop, errorText } from "../bridge";
+import type { Understanding } from "../../contracts/discovery";
 import type { PageMemory } from "../../contracts/workbench";
 export function ProjectMemory({ projectId }: { projectId: string }) {
+  const [understanding, setUnderstanding] = useState<Understanding | null>(
+    null,
+  );
   const [text, setText] = useState(""),
     [error, setError] = useState(""),
     [query, setQuery] = useState(""),
@@ -10,11 +14,16 @@ export function ProjectMemory({ projectId }: { projectId: string }) {
     let active = true;
     void Promise.all([
       desktop().projects.memory(projectId),
+      desktop().discovery.state(projectId),
       desktop().projects.pageMemory(projectId, ""),
     ])
-      .then(([root, pages]) => {
+      .then(([root, discovery, pages]) => {
         if (active) {
           setText(root);
+          setUnderstanding(
+            discovery.reports.find((r) => r.id === discovery.activeReportId) ??
+              null,
+          );
           setEntries(pages);
         }
       })
@@ -27,7 +36,21 @@ export function ProjectMemory({ projectId }: { projectId: string }) {
   }, [projectId]);
   return (
     <article className="paper">
-      <h2>记忆.md</h2>
+      <h2>项目长期记忆</h2>
+      {understanding ? (
+        <section>
+          <strong>
+            已审核产品理解 ·{" "}
+            {new Date(understanding.approvedAt!).toLocaleString()}
+          </strong>
+          <pre className="memory-content">{understanding.markdown}</pre>
+        </section>
+      ) : (
+        <p className="muted">
+          尚无已审核的综合理解。请在「工作台 → 理解产品」自动探索并审核。
+        </p>
+      )}
+      <h3>记忆.md 索引与补充观察</h3>
       {error && (
         <p role="alert" className="error">
           {error}

@@ -1147,3 +1147,30 @@ dialog::backdrop {
 .element-prompt strong {
   overflow-wrap: anywhere;
 }
+
+.discovery textarea {
+  width: 100%;
+  margin-top: 8px;
+  resize: vertical;
+}
+.discovery-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 14px 0;
+}
+.discovery-actions input[type="number"] {
+  width: 65px;
+}
+.understanding-review {
+  margin-top: 24px;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+.understanding-markdown {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  min-height: 300px;
+}

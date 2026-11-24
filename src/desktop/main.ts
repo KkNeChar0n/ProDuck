@@ -54,7 +54,7 @@ else
     const platforms = new PlatformService(database, credentials);
     registerPlatformIpc(platforms, () => window);
     const modelService = new ModelService(database, credentials);
-    const stopModels = registerModelIpc(modelService, () => window);
+    const stopModels = registerModelIpc(modelService, () => window, repository);
     const stopWorkbench = registerWorkbenchIpc(
       database,
       repository,
@@ -62,8 +62,21 @@ else
       () => window,
       platforms,
     );
-    app.on("before-quit", stopWorkbench);
-    app.on("before-quit", stopModels);
+    let stopping = false,
+      stopped = false;
+    app.on("before-quit", (event) => {
+      if (stopped) return;
+      event.preventDefault();
+      if (stopping) return;
+      stopping = true;
+      stopModels();
+      void stopWorkbench()
+        .catch(() => {})
+        .finally(() => {
+          stopped = true;
+          app.quit();
+        });
+    });
     app.on("will-quit", () => database.close());
     app.on("second-instance", () => {
       window?.show();

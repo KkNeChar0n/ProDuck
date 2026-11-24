@@ -1,4 +1,5 @@
 export interface Capture {
+  memoryEligible?: boolean;
   id: string;
   title: string;
   url: string;
@@ -91,11 +92,13 @@ export interface ElementPromptBatch {
   items: ElementPrompt[];
 }
 export interface PrototypeEdit {
+  understanding?: { id: string; digest: string };
   batch?: ElementPromptBatch;
   elementId?: string;
   state?: PreviewState;
 }
 export interface PrototypeDetails {
+  understanding?: { id: string; digest: string };
   coverage?: {
     captureId: string;
     title: string;

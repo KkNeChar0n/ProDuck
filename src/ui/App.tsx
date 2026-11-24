@@ -113,7 +113,7 @@ export function App() {
   }
   const title =
     view === "workbench"
-      ? "从一个页面开始"
+      ? "从理解产品开始"
       : view === "release-settings"
         ? "版本设置"
         : (navigation.find((v) => v[0] === view)?.[2] ?? "项目设置");
@@ -227,10 +227,10 @@ export function App() {
         <div className="sidebar-section">本次任务</div>
         <div className="task-entry">
           <span className="live-dot" />
-          {project ? "等待导入页面" : "先创建一个项目"}
+          {project ? "理解产品与整理资料" : "先创建一个项目"}
         </div>
         <div className="sidebar-note">
-          从一个页面开始，
+          从理解产品开始，
           <br />
           让想法成为可交付的方案。
         </div>

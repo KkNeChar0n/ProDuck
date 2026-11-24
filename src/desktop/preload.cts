@@ -2,6 +2,29 @@ import { contextBridge, ipcRenderer } from "electron";
 contextBridge.exposeInMainWorld(
   "produck",
   Object.freeze({
+    discovery: {
+      open: (id: string, url: string) =>
+        ipcRenderer.invoke("discovery:open", id, url),
+      state: (id: string) => ipcRenderer.invoke("discovery:state", id),
+      start: (id: string, goal: string, budget: number) =>
+        ipcRenderer.invoke("discovery:start", id, goal, budget),
+      resume: (id: string, runId: string) =>
+        ipcRenderer.invoke("discovery:resume", id, runId),
+      cancel: (id: string) => ipcRenderer.invoke("discovery:cancel", id),
+      summarize: (id: string, runId: string) =>
+        ipcRenderer.invoke("discovery:summarize", id, runId),
+      revise: (
+        id: string,
+        reportId: string,
+        digest: string,
+        markdown: string,
+      ) =>
+        ipcRenderer.invoke("discovery:revise", id, reportId, digest, markdown),
+      approve: (id: string, reportId: string, digest: string) =>
+        ipcRenderer.invoke("discovery:approve", id, reportId, digest),
+      generate: (id: string, reportId: string, digest: string) =>
+        ipcRenderer.invoke("discovery:generate", id, reportId, digest),
+    },
     yunxiaoSync: {
       list: (id: string) => ipcRenderer.invoke("yunxiao-sync:list", id),
       prepare: (id: string, publicationId: string, itemId: string) =>

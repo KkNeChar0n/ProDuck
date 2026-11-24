@@ -79,7 +79,7 @@ python3 tests/prototype_smoke.py
 
 ## 进度和限制
 
-[任务清单](openspec/changes/produck-mvp/tasks.md) 按验证结果勾选。界面已获用户确认；模型与原型、PRD 流程通过本地模拟 API 测试。用户已要求暂时跳过真实模型验证，因此重建视觉与交互质量未验收。普通问答仍为独立请求，不保存对话历史。
+[任务清单](openspec/changes/produck-mvp/tasks.md) 按验证结果勾选。界面已获用户确认；模型与原型、PRD 流程通过本地模拟 API 测试。用户已要求暂时跳过真实模型验证，因此重建视觉与交互质量未验收。普通问答自动参考已审核的项目理解，仍不保存对话历史。
 
 飞书首次发布已接入（模拟平台验证通过，真实租户待联调）；云效状态同步已接入（模拟平台验证）；线上差异合并按用户选择暂缓，已支持受限标准库 Python 技能；任意第三方依赖、干净机器验收尚未完成。详见 [原型验证记录](docs/verification/prototype-workflow.md) 和 [Agent/Skill 验证记录](docs/verification/agent-skills.md)、[平台连接验证记录](docs/verification/platform-connections.md)、[首次发布验证记录](docs/verification/feishu-publication.md)、[文档差异验证记录](docs/verification/document-diff.md)。
 
@@ -89,7 +89,7 @@ python3 tests/prototype_smoke.py
 npm run package:mac
 ```
 
-输出 `release/Produck-0.1.17-arm64-test.dmg`，包含 Electron、编译后的钥匙串程序与应用资源。目标最低系统为 macOS 13，当前只在 macOS 26.3 arm64 上构建和检查；尚未在最低系统或无开发工具的机器完成验收。
+输出 `release/Produck-0.1.18-arm64-test.dmg`，包含 Electron、编译后的钥匙串程序与应用资源。目标最低系统为 macOS 13，当前只在 macOS 26.3 arm64 上构建和检查；尚未在最低系统或无开发工具的机器完成验收。
 
 包使用临时签名，未完成 Developer ID 签名和公证，不用于公开分发。安装包未提交 Git；第三方运行组件许可证随包保存。打包验证不代表真实模型与平台集成已通过。
 
@@ -110,3 +110,7 @@ npm run package:mac
 ### 原型多处调整
 
 在「工作台 → 原型」右侧点击「拾取元素」，依次点击目标，并为每处填写独立要求，最后点击「提交 N 处」。可选择最多 12 处，一次生成新候选。切换原型清空选择；失败保留输入。标题栏左上角可收起和展开导航。交接文档在「工作台 → 交接资料」导入；「工作流」用于执行及恢复多步骤任务。详见 [验收记录](docs/verification/element-prompts.md)。
+
+### 自动理解产品
+
+在「工作台 → 理解产品」打开独立 Chrome，登录后开始自动探索。可先导入交接资料；Agent 将页面和资料整理成分模块 Markdown，供编辑审核。通过后作为项目长期记忆，普通问答和 Agent 可调用，再基于多页面证据生成统一候选原型。需要本机安装 Google Chrome，无需配置调试端口。详细操作和覆盖限制见 [Chrome 产品理解验收](docs/verification/product-discovery.md)。

@@ -142,7 +142,7 @@ export function AgentPanel({
         <span className="muted">与你一起完成</span>
       </header>
       <div className="task-progress">
-        <span className="current">理解页面</span>
+        <span className="current">理解产品</span>
         <i />
         <span>调整原型</span>
         <i />
@@ -168,7 +168,7 @@ export function AgentPanel({
               ? `「${project.name}」已准备好。配置项目模型后，可以从一次讨论开始。`
               : "创建项目后即可配置模型并开始对话。"}
             <div className="evidence">
-              在原型页发送要求会生成新候选；其他页面为独立问答，暂不保存对话历史。
+              在原型页发送要求会生成新候选；其他页面问答会参考已审核的项目理解，暂不保存对话历史。
             </div>
             {project && (
               <button className="link" onClick={onSettings}>

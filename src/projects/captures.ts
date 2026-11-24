@@ -10,10 +10,12 @@ export function saveCapture(
   workspace: string,
   value: Omit<Capture, "id" | "relativePath" | "screenshotPath">,
   png: Uint8Array,
+  memoryEligible = true,
 ): Capture {
   const id = randomUUID(),
     record = {
       ...value,
+      ...(memoryEligible ? {} : { memoryEligible: false }),
       id,
       relativePath: `sources/${id}.json`,
       screenshotPath: `sources/${id}.png`,
@@ -27,6 +29,7 @@ export function saveCapture(
     projectPath(workspace, "sources/captures.json"),
     JSON.stringify([...captures(workspace), record], null, 2),
   );
+  if (!memoryEligible) return record;
   const note = `# ${value.title.replace(/[\r\n]/g, " ")}\n\n状态：已观察\n来源：[页面采集](../${record.relativePath})\n地址：${value.url}\n采集时间：${value.capturedAt}\n\n## 可见页面内容\n\n${value.text}\n\n## 已记录操作\n\n${value.actions.map((a) => "- " + a).join("\n") || "尚未记录操作。"}\n\n## 待验证\n\n未观察到的权限、后台规则和其他页面状态尚未确认。\n`;
   atomicWrite(projectPath(workspace, `memory/${id}.md`), note);
   writeMemoryIndex(workspace);
@@ -46,7 +49,7 @@ export function searchPageMemory(workspace: string, query: string) {
   if (typeof query !== "string" || query.length > 300)
     throw new Error("检索词过长");
   const term = query.trim().toLocaleLowerCase(),
-    all = captures(workspace),
+    all = captures(workspace).filter((c) => c.memoryEligible !== false),
     confirmed = confirmations(workspace);
   const isConfirmed = (capture: Capture) =>
     confirmed.some(
@@ -97,8 +100,10 @@ function textHash(text: string) {
   return createHash("sha256").update(text).digest("hex");
 }
 export function confirmPageMemory(workspace: string, captureId: string) {
-  const capture = getCapture(workspace, captureId),
-    records = confirmations(workspace),
+  const capture = getCapture(workspace, captureId);
+  if (capture.memoryEligible === false)
+    throw new Error("请审核综合理解文档，自动探索证据不能单独确认为长期记忆");
+  const records = confirmations(workspace),
     contentHash = textHash(capture.text);
   if (
     !records.some(
@@ -130,6 +135,7 @@ export function confirmPageMemory(workspace: string, captureId: string) {
 function writeMemoryIndex(workspace: string) {
   const records = confirmations(workspace);
   const index = captures(workspace)
+    .filter((c) => c.memoryEligible !== false)
     .map((c) => {
       const confirmed = records.some(
         (r) => r.captureId === c.id && r.contentHash === textHash(c.text),

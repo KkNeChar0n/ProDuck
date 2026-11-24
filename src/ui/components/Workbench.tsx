@@ -1,3 +1,4 @@
+import { ProductDiscovery } from "./ProductDiscovery";
 import { PrototypeChecks } from "./PrototypeChecks";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
@@ -28,9 +29,9 @@ export function Workbench({
   visible: boolean;
   onContext: (value: PrototypeContext | null) => void;
 }) {
-  const [tab, setTab] = useState<"browser" | "prototype" | "sources">(
-      "browser",
-    ),
+  const [tab, setTab] = useState<
+      "discovery" | "browser" | "prototype" | "sources"
+    >("discovery"),
     [url, setUrl] = useState(""),
     [loaded, setLoaded] = useState(false),
     [pageTitle, setPageTitle] = useState(""),
@@ -186,7 +187,8 @@ export function Workbench({
       comparison !== null ||
       (tab === "browser" && !loaded) ||
       (tab === "prototype" && !previewReady) ||
-      tab === "sources"
+      tab === "sources" ||
+      tab === "discovery"
     ) {
       void desktop().workbench.hide();
       return;
@@ -238,6 +240,7 @@ export function Workbench({
     <>
       <div className="tabs" role="tablist">
         {[
+          ["discovery", "理解产品"],
           ["browser", "浏览器"],
           ["prototype", "原型"],
           ["sources", "交接资料"],
@@ -258,7 +261,9 @@ export function Workbench({
           {error}
         </p>
       )}
-      {tab === "sources" ? (
+      {tab === "discovery" ? (
+        <ProductDiscovery projectId={projectId} />
+      ) : tab === "sources" ? (
         <ProjectSources projectId={projectId} />
       ) : (
         <>
@@ -286,7 +291,11 @@ export function Workbench({
                 <button disabled={busy}>打开网页</button>
               </form>
               <div className="canvas-tools">
-                <span>{loaded ? pageTitle : "可在这里登录并体验真实页面"}</span>
+                <span>
+                  {loaded
+                    ? pageTitle
+                    : "手动补充采集：保存当前页面文字、结构和截图"}
+                </span>
                 <button
                   disabled={!loaded || busy}
                   onClick={() =>
@@ -524,7 +533,7 @@ export function Workbench({
           </div>
           <div className="canvas-caption">
             {tab === "browser"
-              ? "真实网站模式：由你操作登录和业务页面。"
+              ? "手动浏览器：仅采集当前页面。自动探索请使用「理解产品」里的独立 Chrome。"
               : "原型模式：只运行模拟交互，外部网络与真实业务写入已禁用。"}
           </div>
           <section className="capture-controls">

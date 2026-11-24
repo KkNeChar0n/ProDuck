@@ -338,6 +338,43 @@ const wait = async (w, expression) => {
           : data.messages[0].content.includes("Markdown PRD")
             ? "# 客户管理 PRD\n\n## 目标\n支持筛选和新增客户。\n\n## 待确认\n权限规则待确认。"
             : "模型流式响应已验证";
+        if (data.messages[0].content.includes("MEMORY_CONTEXT_TEST")) {
+          assert(data.messages[0].content.includes("人工核对"));
+          assert(data.messages[0].content.includes("理解版本："));
+          content = "已使用审核记忆回答";
+        }
+        if (data.messages[0].content.startsWith("PRODUCK_DISCOVERY_STEP")) {
+          assert(data.messages[0].content.includes("客户筛选规则"));
+          content = JSON.stringify({
+            observation: "客户模块提供列表、搜索与新增入口；提交未体验",
+            action: {
+              kind: "finish",
+              reason: "已记录客户模块，保存操作留待人工体验",
+            },
+          });
+        } else if (
+          data.messages[0].content.startsWith("PRODUCK_DISCOVERY_REPORT")
+        ) {
+          const evidence = JSON.parse(
+            data.messages[0].content
+              .split("页面证据（每页摘录400字）：")[1]
+              .split("\n体验记录：")[0],
+          );
+          content = JSON.stringify({
+            overview: "客户关系管理产品",
+            modules: [
+              {
+                name: "客户模块",
+                understanding: "客户列表提供筛选；规则结合交接资料",
+                flows: ["浏览客户列表→查看客户信息"],
+                evidenceIds: [evidence[0].id],
+                unknowns: ["保存流程未体验"],
+              },
+            ],
+            conflicts: [],
+            limitations: ["仅观察当前列表"],
+          });
+        }
         if (data.messages[0].content.includes('"batch":')) {
           if (failBatchOnce) {
             failBatchOnce = false;
@@ -731,7 +768,7 @@ const wait = async (w, expression) => {
     else
       await wait(
         window,
-        `document.querySelector('[aria-label="页面地址"]') !== null`,
+        `document.querySelector('[aria-label="产品 Chrome 地址"]') !== null`,
       );
     await wc.executeJavaScript(
       `Array.from(document.querySelectorAll('nav button')).find(b=>b.textContent.includes('Skills')).click()`,
@@ -1253,6 +1290,99 @@ const wait = async (w, expression) => {
     )[0].id,
     published[0].id,
   );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('.nav')).find(b=>b.textContent.includes('工作台')).click()`,
+  );
+  await wait(
+    window,
+    `Array.from(document.querySelectorAll('[role=tab]')).some(b=>b.textContent==='理解产品')`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('[role=tab]')).find(b=>b.textContent==='理解产品').click()`,
+  );
+  await wait(
+    window,
+    `!!document.querySelector('[aria-label="产品 Chrome 地址"]')`,
+  );
+  await wc.executeJavaScript(
+    `{const e=document.querySelector('[aria-label="产品 Chrome 地址"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,'http://127.0.0.1:${server.address().port}/customers');e.dispatchEvent(new Event('input',{bubbles:true}));}`,
+  );
+  await wc.executeJavaScript(
+    `document.querySelector('[aria-label="产品 Chrome 地址"]').form.requestSubmit()`,
+  );
+  await wait(window, `document.body.innerText.includes('Chrome 已打开')`);
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='已登录，开始理解产品').click()`,
+  );
+  await wait(
+    window,
+    `!!document.querySelector('[aria-label="模块理解 Markdown"]')`,
+    60000,
+  );
+  const draftUnderstanding = await wc.executeJavaScript(
+    `window.produck.discovery.state(${JSON.stringify(firstRelease.id)})`,
+  );
+  assert.equal(draftUnderstanding.activeReportId, null);
+  assert(draftUnderstanding.reports[0].markdown.includes("客户模块"));
+  await wc.executeJavaScript(
+    `{const e=document.querySelector('[aria-label="模块理解 Markdown"]');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(e,e.value+${JSON.stringify("\n人工核对：客户模块需保留搜索。")});e.dispatchEvent(new Event('input',{bubbles:true}));}`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='保存修订').click()`,
+  );
+  await wait(
+    window,
+    `document.querySelector('[aria-label="产品理解版本"]').options.length===2`,
+  );
+  await wc.executeJavaScript(
+    `document.querySelector('.understanding-review').scrollIntoView({block:'start'})`,
+  );
+  await wc.executeJavaScript(
+    `new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`,
+  );
+  writeFileSync(
+    "docs/verification/desktop-discovery-review.png",
+    (await wc.capturePage()).toPNG(),
+  );
+  const beforeDiscoveryVersions = await wc.executeJavaScript(
+    `window.produck.workbench.versions(${JSON.stringify(firstRelease.id)})`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='审核通过并生成原型').click()`,
+  );
+  await wait(
+    window,
+    `document.querySelector('[aria-label="原型版本"]')?.options.length===${beforeDiscoveryVersions.length + 1}`,
+    60000,
+  );
+  await wait(window, `!!document.querySelector('[aria-label="元素拾取器"]')`);
+  const reviewedUnderstanding = await wc.executeJavaScript(
+    `window.produck.discovery.state(${JSON.stringify(firstRelease.id)})`,
+  );
+  const activeUnderstanding = reviewedUnderstanding.reports.find(
+    (r) => r.id === reviewedUnderstanding.activeReportId,
+  );
+  assert(activeUnderstanding.approvedAt);
+  assert(activeUnderstanding.markdown.includes("人工核对"));
+  const isolatedUnderstanding = await wc.executeJavaScript(
+    `window.produck.discovery.state(${JSON.stringify(nextRelease)})`,
+  );
+  assert.equal(isolatedUnderstanding.activeReportId, activeUnderstanding.id);
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('.nav')).find(b=>b.textContent.includes('项目记忆')).click()`,
+  );
+  await wait(window, `document.body.innerText.includes('人工核对')`);
+  writeFileSync(
+    "docs/verification/desktop-understanding-memory.png",
+    (await wc.capturePage()).toPNG(),
+  );
+  await wc.executeJavaScript(
+    `{const e=document.querySelector('[aria-label="修改要求"]');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(e,'MEMORY_CONTEXT_TEST');e.dispatchEvent(new Event('input',{bubbles:true}));}`,
+  );
+  await wc.executeJavaScript(
+    `document.querySelector('[aria-label="发送修改要求"]').click()`,
+  );
+  await wait(window, `document.body.innerText.includes('已使用审核记忆回答')`);
   assert.equal(await wc.executeJavaScript("typeof require"), "undefined");
   assert.equal(errors.length, 0, errors.join("\n"));
   console.log(

@@ -48,6 +48,7 @@ export interface DesktopInfo {
  * Legacy DTO projectId fields carry this execution scope for migrated receipts.
  */
 export interface DesktopBridge {
+  discovery: import("./discovery.js").DiscoveryBridge;
   releases: {
     create(projectId: string, name: string): Promise<WorkspaceState>;
     select(projectId: string, releaseId: string): Promise<WorkspaceState>;
