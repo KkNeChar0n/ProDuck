@@ -1,0 +1,13 @@
+{
+  "status": "generated",
+  "createdAt": "2026-11-24T08:55:58.807Z",
+  "characters": 8877,
+  "versionId": "5c902d5e-dea0-4376-bec0-ef2d56d625e5",
+  "contentHash": "8d26df5753a1da307c5c19bcfaed51625dba65322f08229461f14e68350f1aec",
+  "notes": [
+    "Synthetic fixture only; no user page data transmitted",
+    "Interactions must be validated separately",
+    "Screenshot captured but not sent to the model"
+  ],
+  "interactionFailure": "重置：form.reset 被 id=reset 控件遮蔽；同一调用也用于新增后的刷新。"
+}

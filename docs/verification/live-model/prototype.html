@@ -1,0 +1,175 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="Content-Security-Policy" content="default-src 'none';script-src 'unsafe-inline';style-src 'unsafe-inline';img-src data:;font-src data:;connect-src 'none';form-action 'none';frame-src 'none';object-src 'none';base-uri 'none'">
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>青禾 CRM · 客户列表</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f6f8f3;color:#28392d;font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.5}
+header{height:57px;padding:18px 28px;background:#fff;font-weight:600;border-bottom:1px solid #e5eadf}
+main{margin:28px;padding:28px 28px 42px;background:#fff;border:1px solid #dce4d8;border-radius:10px;min-height:440px}
+.heading{display:flex;justify-content:space-between;align-items:center;gap:20px}
+h1{font-size:24px;line-height:34px;margin:0 0 8px;font-weight:700}
+.subtitle{font-size:13px;color:#7a8576;line-height:19px}
+button,input,select{font:inherit;border:1px solid #d5dece;border-radius:6px;background:#fff;color:#000;padding:10px 13px;line-height:20px}
+button{cursor:pointer;white-space:nowrap}
+button:hover{background:#f4f6f0}
+button:active{transform:translateY(1px)}
+button.primary{background:#315543;color:white;border-color:transparent}
+button.primary:hover{background:#264635}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #769480;outline-offset:2px}
+#add{height:40px;padding:9px 13px}
+#filters{display:flex;gap:10px;margin:26px 0;min-height:44px}
+#search{width:179px}
+#status{width:100px;padding-right:8px}
+#filters button,#filters input,#filters select{height:44px}
+table{width:100%;border-collapse:collapse;text-align:left;table-layout:fixed}
+th,td{height:53px;padding:16px;line-height:20px;border-bottom:1px solid #e8ede3;overflow-wrap:anywhere}
+th{font-weight:500;background:#f4f6f0;color:#727f68}
+th:first-child{width:37.25%}
+.empty{height:159px;text-align:center;color:#7a8576}
+dialog{width:398px;max-width:calc(100% - 32px);padding:28px;border:1px solid #ddd;border-radius:12px;color:#000;background:#fff}
+dialog::backdrop{background:rgba(24,35,27,.32)}
+h2{font-size:21px;line-height:30px;margin:12px 0 17px}
+.field{display:block;margin-bottom:16px}
+.field input{display:block;margin-top:8px;width:calc(100% - 6px);height:42px}
+.actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.rules{font-size:12px;color:#7a8576;margin:14px 0 0}
+.error{font-size:12px;color:#b64036;margin:6px 0 0}
+[aria-invalid="true"]{border-color:#b64036}
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:5;padding:12px 20px;border:1px solid #cbdcc9;border-radius:8px;background:#edf5eb;color:#315543;box-shadow:0 4px 18px #28392d14;max-width:calc(100% - 32px)}
+[hidden]{display:none!important}
+@media(max-width:580px){header{padding-left:18px}main{margin:18px;padding:20px 16px 30px}.heading{gap:10px}#filters{flex-wrap:wrap}#search{width:100%}th,td{padding:12px 8px}h1{font-size:22px}.subtitle{font-size:12px}}
+</style>
+</head>
+<body data-produck-id="pd-d50d7c29-ff3d-4927-b976-5f8375e1959b">
+<header data-produck-id="app-header">青禾 CRM / 客户管理</header>
+<main data-produck-id="customer-main">
+<section class="heading" data-produck-id="customer-heading">
+<div data-produck-id="pd-49f9fa36-5a07-48c1-806e-23a570f81c8e">
+<h1 data-produck-id="customer-title">客户列表</h1>
+<div class="subtitle" data-produck-id="customer-subtitle">管理客户信息，跟进每一次合作。</div>
+</div>
+<button id="add" class="primary" type="button" data-produck-id="add-customer">新增客户</button>
+</section>
+<form id="filters" role="search" data-produck-id="customer-filters">
+<input id="search" type="search" placeholder="搜索客户名称" aria-label="搜索客户名称" data-produck-id="search-name">
+<select id="status" aria-label="客户状态" data-produck-id="filter-status">
+<option value="" data-produck-id="pd-a9a37df8-6fd6-49d0-9b01-ee8ecfdb5265">全部状态</option>
+<option value="合作中" data-produck-id="pd-72a5abdc-71d5-4f2f-a255-ef6aef14d3c4">合作中</option>
+<option value="跟进中" data-produck-id="pd-0ff846b5-d52a-450c-8933-f78ecf95dc82">跟进中</option>
+</select>
+<button type="submit" data-produck-id="search-submit">搜索</button>
+<button id="reset" type="button" data-produck-id="search-reset">重置</button>
+</form>
+<table aria-label="客户列表" data-produck-id="customer-table">
+<thead data-produck-id="customer-table-head"><tr data-produck-id="pd-1faa66e2-09fc-4b0d-8f72-637d43b99bd9"><th scope="col" data-produck-id="pd-2922d20d-e211-4d05-9be7-15c4923ce6fd">客户名称</th><th scope="col" data-produck-id="pd-a9612d41-583f-4b8a-8cb2-4562a66f75be">负责人</th><th scope="col" data-produck-id="pd-f41a837d-4fa2-435d-a628-a0be039de024">状态</th></tr></thead>
+<tbody id="customer-rows" data-produck-id="customer-table-body"></tbody>
+</table>
+</main>
+<dialog id="customer-dialog" aria-labelledby="dialog-title" data-produck-id="customer-dialog">
+<h2 id="dialog-title" data-produck-id="dialog-title">新增客户</h2>
+<form id="customer-form" novalidate="" data-produck-id="customer-form">
+<label class="field" for="customer-name" data-produck-id="name-field">客户名称
+<input id="customer-name" name="name" required="" aria-describedby="name-error" data-produck-id="customer-name">
+<span class="error" id="name-error" hidden="" data-produck-id="name-error">请输入客户名称</span>
+</label>
+<label class="field" for="customer-owner" data-produck-id="owner-field">负责人
+<input id="customer-owner" name="owner" required="" aria-describedby="owner-error" data-produck-id="customer-owner">
+<span class="error" id="owner-error" hidden="" data-produck-id="owner-error">请输入负责人</span>
+</label>
+<div class="actions" data-produck-id="dialog-actions">
+<button id="cancel" type="button" data-produck-id="dialog-cancel">取消</button>
+<button type="submit" class="primary" data-produck-id="dialog-save">保存</button>
+</div>
+<p class="rules" data-produck-id="simulation-rules">模拟规则：两项均必填；新增状态默认为“跟进中”。仅在本页内存保存，刷新后恢复模拟数据。</p>
+</form>
+</dialog>
+<div id="feedback" class="toast" role="status" aria-live="polite" hidden="" data-produck-id="feedback"></div>
+<script>
+(function(){
+"use strict";
+const $=id=>document.getElementById(id);
+const customers=[
+{id:1,name:"青禾科技",owner:"陈晓",status:"合作中"},
+{id:2,name:"拾光设计",owner:"林悦",status:"跟进中"},
+{id:3,name:"山野生活",owner:"周舟",status:"合作中"}
+];
+let nextId=4,query="",status="",timer;
+const dialog=$("customer-dialog");
+function notify(message){
+clearTimeout(timer);
+$("feedback").textContent=message;
+$("feedback").hidden=false;
+timer=setTimeout(()=>{$("feedback").hidden=true},3500);
+}
+function render(){
+const rows=$("customer-rows");
+rows.replaceChildren();
+const filtered=customers.filter(c=>c.name.toLocaleLowerCase().includes(query.toLocaleLowerCase())&&(!status||c.status===status));
+if(!filtered.length){
+const tr=document.createElement("tr"),td=document.createElement("td");
+tr.setAttribute("data-produck-id","customer-empty-row");
+td.colSpan=3;td.className="empty";td.textContent="暂无匹配客户，请调整搜索条件或重置。";
+td.setAttribute("data-produck-id","customer-empty");
+tr.append(td);rows.append(tr);
+}else{
+filtered.forEach(c=>{
+const tr=document.createElement("tr");
+tr.setAttribute("data-produck-id","customer-row-"+c.id);
+["name","owner","status"].forEach(key=>{
+const td=document.createElement("td");td.textContent=c[key];
+td.setAttribute("data-produck-id","customer-"+c.id+"-"+key);
+tr.append(td);
+});
+rows.append(tr);
+});
+}
+return filtered.length;
+}
+$("filters").addEventListener("submit",e=>{
+e.preventDefault();query=$("search").value.trim();status=$("status").value;
+notify("搜索完成，共 "+render()+" 位客户");
+});
+$("reset").addEventListener("click",()=>{
+HTMLFormElement.prototype.reset.call($("filters"));
+query="";status="";render();notify("已重置搜索条件");
+});
+function clearErrors(){
+["name","owner"].forEach(key=>{
+$("customer-"+key).removeAttribute("aria-invalid");
+$(key+"-error").hidden=true;
+});
+}
+$("add").addEventListener("click",()=>{
+HTMLFormElement.prototype.reset.call($("customer-form"));
+clearErrors();dialog.showModal();$("customer-name").focus();
+});
+$("cancel").addEventListener("click",()=>dialog.close());
+dialog.addEventListener("close",()=>$("add").focus());
+["name","owner"].forEach(key=>{
+$("customer-"+key).addEventListener("input",()=>{
+if($("customer-"+key).value.trim()){
+$("customer-"+key).removeAttribute("aria-invalid");$(key+"-error").hidden=true;
+}
+});
+});
+$("customer-form").addEventListener("submit",e=>{
+e.preventDefault();
+let first=null;
+["name","owner"].forEach(key=>{
+const input=$("customer-"+key),invalid=!input.value.trim();
+$(key+"-error").hidden=!invalid;
+if(invalid){input.setAttribute("aria-invalid","true");if(!first)first=input}
+else input.removeAttribute("aria-invalid");
+});
+if(first){first.focus();return}
+customers.push({id:nextId++,name:$("customer-name").value.trim(),owner:$("customer-owner").value.trim(),status:"跟进中"});
+HTMLFormElement.prototype.reset.call($("filters"));
+query="";status="";render();dialog.close();notify("客户新增成功（模拟保存）");
+});
+render();
+})();
+</script>
+
+</body></html>

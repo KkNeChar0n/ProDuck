@@ -45,6 +45,7 @@ const moduleAt = (path) => import(pathToFileURL(resolve("dist", path)).href);
   db = openProjectDatabase(join(temporary, "test.sqlite"));
   const projects = new ProjectRepository(db, join(temporary, "state.json")),
     project = projects.create("合成客户页面验证", temporary);
+  const release = projects.createRelease(project.id, "真实模型验收");
   db.prepare("INSERT INTO model_profiles VALUES(?,?,?,?,?)").run(
     project.id,
     profile.provider,
@@ -119,13 +120,13 @@ const moduleAt = (path) => import(pathToFileURL(resolve("dist", path)).href);
     "Synthetic page captured; requesting one prototype from the configured model.",
   );
   let last = 0;
-  const version = await generator.generate(project.id, capture.id, (event) => {
+  const version = await generator.generate(release.id, capture.id, (event) => {
     if (Date.now() - last > 5000 || event.state !== "running") {
       console.log(`${event.state}: ${event.characters} characters`);
       last = Date.now();
     }
   });
-  const html = versions.read(project.id, version.id);
+  const html = versions.read(release.id, version.id);
   writeFileSync(join(out, "prototype.html"), html);
   browser.hide();
   await preview.load(html);
@@ -150,6 +151,7 @@ const moduleAt = (path) => import(pathToFileURL(resolve("dist", path)).href);
       {
         status: "generated",
         createdAt: new Date().toISOString(),
+        model: profile.model,
         characters: html.length,
         versionId: version.id,
         contentHash: version.contentHash,
@@ -166,6 +168,7 @@ const moduleAt = (path) => import(pathToFileURL(resolve("dist", path)).href);
   console.log(
     `Generated ${html.length} characters. Outputs saved under outputs/live-validation.`,
   );
+  generator.close();
   preview.close();
   browser.close();
   window.destroy();
