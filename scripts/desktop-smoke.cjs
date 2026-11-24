@@ -540,7 +540,7 @@ const wait = async (w, expression) => {
     `document.querySelector('.native-surface').getBoundingClientRect().width`,
   );
   await wc.executeJavaScript(
-    `document.querySelector('.collapse-navigation').click()`,
+    `document.querySelector('[aria-label="收起导航"]').click()`,
   );
   await wait(
     window,

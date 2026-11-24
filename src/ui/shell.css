@@ -1107,11 +1107,6 @@ dialog::backdrop {
   color: var(--green);
 }
 
-.collapse-navigation {
-  align-self: flex-end;
-  font-size: 12px;
-  margin-bottom: 12px;
-}
 .composer {
   max-height: 70%;
   overflow-y: auto;

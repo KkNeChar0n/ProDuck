@@ -137,12 +137,6 @@ export function App() {
         <span className="demo-badge">本地项目 · 开发预览</span>
       </header>
       <aside className="sidebar">
-        <button
-          className="collapse-navigation"
-          onClick={() => setCollapsed(true)}
-        >
-          ‹ 收起左侧
-        </button>
         <div className="project-label">
           当前项目
           <button
