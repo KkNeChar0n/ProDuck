@@ -111,7 +111,7 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
           maxLength={2000}
           value={goal}
           onChange={(e) => setGoal(e.target.value)}
-          placeholder="如：重点理解证书申请、部署、续期与告警流程"
+          placeholder="如：重点理解主要模块、列表筛选、详情查看和关键操作流程"
           disabled={busy || running}
         />
       </label>
@@ -120,6 +120,7 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
           探索步数{" "}
           <input
             aria-label="探索步数"
+            aria-describedby="discovery-budget-help"
             type="number"
             min={2}
             max={30}
@@ -151,6 +152,13 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
           </button>
         )}
       </div>
+      <p className="muted" id="discovery-budget-help">
+        通常保留默认 12 步即可。聚焦一个流程可选 6–8 步，初步了解多个模块可选
+        20–30 步。
+        一步是观察一次页面状态并决定下一步操作；弹窗和筛选结果也可能各占一步，不等于模块数量。
+        步数越多通常耗时和模型用量越高，Agent
+        也可能提前结束；达到上限后会整理已有依据，不代表已完整理解产品。
+      </p>
       <p className="muted">
         开始后，页面文字、元素和交接资料将发送给项目模型。自动体验查看、筛选和展开流程；保存、提交、删除等转为手动操作。截图保存在本地供核对。Chrome
         中手动登录即可，无需配置调试端口。

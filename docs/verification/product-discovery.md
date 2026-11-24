@@ -31,3 +31,5 @@
 - 安装包测试会使用本机已安装的 Chrome，但禁用系统 Node/Python/Codex/Claude CLI；在 DMG 提取副本中运行同一桌面流程。该测试不等同全新 Mac 上的首次安装验证。
 
 记录：`product-discovery-smoke.json`、`desktop-discovery-review.png`、`desktop-understanding-memory.png`、`packaged-runtime.json`。模型与平台凭证没有写入仓库。
+
+2026-11-24 文案调整（0.1.19）：关注范围使用通用固定示例，不读取交接资料生成占位文案；步数输入旁补充默认 12、单流程 6–8、多模块 20–30 的建议，解释按页面状态计步及时间/模型用量影响。上限表示探索预算，不代表完整覆盖。
