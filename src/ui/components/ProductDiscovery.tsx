@@ -89,7 +89,7 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
           void act(async () => {
             await desktop().discovery.open(projectId, url);
             setNotice(
-              "Chrome 已打开。请完成登录并停在产品首页，再点击开始理解。",
+              "Chrome 已打开。请完成登录并停在产品首页，再点击授权并开始自动体验。",
             );
           });
         }}
@@ -139,7 +139,7 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
             })
           }
         >
-          已登录，开始理解产品
+          授权并开始自动体验
         </button>
         {running && (
           <button
@@ -148,7 +148,7 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
               void act(() => desktop().discovery.cancel(projectId))
             }
           >
-            暂停并手动接管
+            暂停自动体验
           </button>
         )}
       </div>
@@ -160,7 +160,10 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
         也可能提前结束；达到上限后会整理已有依据，不代表已完整理解产品。
       </p>
       <p className="muted">
-        开始后，页面文字、元素和交接资料将发送给项目模型。自动体验查看、筛选和展开流程；保存、提交、删除等转为手动操作。截图保存在本地供核对。Chrome
+        授权后，Agent
+        将自行点击、输入、展开菜单并体验当前站点，普通操作失败会重新观察或换路。涉及业务数据修改时会单次确认，确认后仍由
+        Agent
+        执行。页面文字、元素和交接资料将发送给项目模型，截图留在本地。Chrome
         中手动登录即可，无需配置调试端口。
       </p>
       {notice && <p role="status">{notice}</p>}
@@ -198,7 +201,7 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
                   )
                 }
               >
-                从 Chrome 当前页面继续
+                授权并继续自动体验
               </button>
               <button
                 disabled={busy || !state.run.captureIds.length}

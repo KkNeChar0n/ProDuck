@@ -1,3 +1,4 @@
+import { actionConfirmation } from "./browser-policy.js";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { streamModel } from "../agent/model-client.js";
@@ -197,6 +198,8 @@ export class DiscoveryService {
           );
         run.url = safeUrl(url);
         save();
+        let consecutiveFailures = 0;
+        const attempts = new Map<string, number>();
         while (run.captureIds.length < run.budget) {
           signal.throwIfAborted();
           const page = await this.browser.observe(run.projectId);
@@ -226,7 +229,7 @@ export class DiscoveryService {
           const answer = json(
             await this.model(
               scope,
-              `PRODUCK_DISCOVERY_STEP\n你是产品经理，自动体验产品的模块与关键查看流程。${untrusted}\n只返回 JSON：{"observation":"当前模块、行为和待验证事项","action":{"kind":"click","index":0}}。action 可用 click(index)、fill(index,value，仅搜索)、select(index,value)、scroll(direction:up/down)、back、finish(reason)。优先访问未覆盖的模块、详情、筛选和弹窗，不重复无意义点击。保存/提交/删除/发布/登录等交给用户，不能执行。若已覆盖目标或无可执行动作，finish 并说明未覆盖项。索引只来自本次页面。\n目标：${run.goal || "理解产品定位、主要模块及关键流程"}\n历史：${JSON.stringify(run.steps.slice(-12).map((s) => ({ observation: s.observation, action: s.action, result: s.result })))}\n交接资料概要：${JSON.stringify(run.sources.map((s) => ({ name: s.name, text: s.text.slice(0, 500), truncated: s.truncated })))}\n页面证据：${JSON.stringify({ title: page.title, url: safeUrl(page.url), text: page.text, elements: page.elements, blocked: page.blocked })}`,
+              `PRODUCK_DISCOVERY_STEP\n你是产品经理，自动体验产品的模块与关键查看流程。${untrusted}\n只返回 JSON：{"observation":"当前模块、行为和待验证事项","action":{"kind":"click","index":0,"effect":"read"}}。action 可用 click(index)、fill(index,value，普通表单)、select(index,value)、press(index,key:Enter/Escape/Tab/ArrowDown/ArrowUp/ArrowLeft/ArrowRight/Space)、scroll(direction:up/down)、back、finish(reason)。优先访问未覆盖的模块、详情、筛选和弹窗，不重复无意义点击。用户已授权当前站点的自主浏览器交互，不要因控件名称陌生或需要展开侧栏而要求手动操作。每个操作标注 effect 为 read（浏览或修改未提交表单）、write（修改业务数据）或 unknown（无法判断实际后果）；业务写入由宿主请求单次确认，确认后仍由你执行。登录与验证码交给用户。普通操作失败或用户拒绝时，重新观察并换其他入口，不重复失败动作；不要将一次拒绝视为整个任务失败。若已覆盖目标或无可执行动作，finish 并说明未覆盖项。索引只来自本次页面。\n目标：${run.goal || "理解产品定位、主要模块及关键流程"}\n历史：${JSON.stringify(run.steps.slice(-12).map((s) => ({ observation: s.observation, action: s.action, result: s.result })))}\n交接资料概要：${JSON.stringify(run.sources.map((s) => ({ name: s.name, text: s.text.slice(0, 500), truncated: s.truncated })))}\n页面证据：${JSON.stringify({ title: page.title, url: safeUrl(page.url), text: page.text, elements: page.elements, blocked: page.blocked })}`,
               signal,
             ),
           );
@@ -255,8 +258,51 @@ export class DiscoveryService {
           // Persist intent before action; resume always observes current state rather than replaying it.
           step.result += "；动作准备执行";
           save();
-          await this.browser.action(run.projectId, page, step.action, signal);
-          step.result += "；动作已执行，效果以后一页观察为准";
+          try {
+            const target =
+              "index" in step.action
+                ? page.elements.find(
+                    (e) => e.index === (step.action as { index: number }).index,
+                  )
+                : undefined;
+            if (actionConfirmation(page, step.action)) {
+              const key = digest(
+                JSON.stringify({
+                  url: page.url,
+                  kind: step.action.kind,
+                  label: target?.label,
+                  tag: target?.tag,
+                  href: target?.href,
+                }),
+              );
+              if (run.steps.some((s) => s.businessActionKey === key))
+                throw new Error(
+                  "此业务操作此前已确认或尝试，不自动重复；选择其他入口",
+                );
+              step.businessActionKey = key;
+              run.message = `等待本次业务操作确认：${target?.label || step.action.kind}`;
+              save();
+            }
+            const attempt = page.fingerprint + JSON.stringify(step.action);
+            const count = (attempts.get(attempt) ?? 0) + 1;
+            attempts.set(attempt, count);
+            if (count > 2)
+              throw new Error("相同页面上的操作已尝试两次，请换其他入口");
+            await this.browser.action(run.projectId, page, step.action, signal);
+            step.result += "；动作已执行，效果以后一页观察为准";
+            consecutiveFailures = 0;
+          } catch (error) {
+            signal.throwIfAborted();
+            step.result += `；操作未完成或已跳过：${error instanceof Error ? error.message : "未知错误"}。重新观察并选择其他入口；业务操作不自动重放。`;
+            consecutiveFailures++;
+            run.message = "正在重新观察并寻找其他可用入口";
+            if (consecutiveFailures >= 3) {
+              step.result +=
+                "；连续三次操作未完成，自动整理已有依据并标注未覆盖范围";
+              save();
+              break;
+            }
+          }
           save();
         }
       }
@@ -286,7 +332,7 @@ export class DiscoveryService {
     } catch (e) {
       run.state = "paused";
       run.message = signal.aborted
-        ? "已暂停，采集依据已保留，可手动体验后继续"
+        ? "已暂停，采集依据已保留，可继续自动体验"
         : e instanceof Error
           ? e.message
           : "理解失败";

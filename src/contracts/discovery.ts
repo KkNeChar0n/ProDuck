@@ -6,6 +6,8 @@ export interface DiscoveryElement {
   type: string;
   href?: string;
   options?: string[];
+  submitsForm?: boolean;
+  inForm?: boolean;
 }
 export interface DiscoveryPage {
   title: string;
@@ -16,12 +18,26 @@ export interface DiscoveryPage {
   fingerprint: string;
   blocked: string[];
 }
-export type DiscoveryAction =
+export type DiscoveryAction = (
   | { kind: "click"; index: number }
   | { kind: "fill" | "select"; index: number; value: string }
   | { kind: "scroll"; direction: "up" | "down" }
+  | {
+      kind: "press";
+      index: number;
+      key:
+        | "Enter"
+        | "Escape"
+        | "Tab"
+        | "ArrowDown"
+        | "ArrowUp"
+        | "ArrowLeft"
+        | "ArrowRight"
+        | "Space";
+    }
   | { kind: "back" }
-  | { kind: "finish"; reason: string };
+  | { kind: "finish"; reason: string }
+) & { effect?: "read" | "write" | "unknown" };
 export interface DiscoveryRun {
   id: string;
   projectId: string;
@@ -38,6 +54,7 @@ export interface DiscoveryRun {
     observation: string;
     action?: DiscoveryAction;
     result: string;
+    businessActionKey?: string;
   }[];
   sources: {
     id: string;

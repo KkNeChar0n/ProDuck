@@ -13,6 +13,7 @@ import {
 } from "../src/discovery/service.js";
 import { UnderstandingRepository } from "../src/discovery/repository.js";
 import {
+  actionConfirmation,
   requestAllowed,
   validateDiscoveryAction,
 } from "../src/discovery/browser-policy.js";
@@ -64,7 +65,7 @@ function output(run: DiscoveryRun) {
     limitations: ["仅体验列表"],
   };
 }
-test("discovery policy rejects writes, cross-site navigation and unsafe input", () => {
+test("discovery policy permits ordinary controls and POST queries while requiring write confirmation", () => {
   assert(
     requestAllowed(
       "https://example.com/list",
@@ -74,7 +75,7 @@ test("discovery policy rejects writes, cross-site navigation and unsafe input", 
     ),
   );
   assert(
-    !requestAllowed(
+    requestAllowed(
       "https://example.com/query",
       "POST",
       "https://example.com",
@@ -102,11 +103,53 @@ test("discovery policy rejects writes, cross-site navigation and unsafe input", 
     { kind: "fill", index: 2, value: "test" },
     "https://example.com",
   );
-  assert.throws(() =>
-    validateDiscoveryAction(
-      page,
-      { kind: "click", index: 1 },
+  assert(actionConfirmation(page, { kind: "click", index: 1 }));
+  const sidebar = {
+    ...page,
+    elements: [
+      {
+        index: 0,
+        tag: "BUTTON",
+        role: "",
+        type: "button",
+        label: "切换侧边栏",
+      },
+    ],
+  };
+  validateDiscoveryAction(
+    sidebar,
+    { kind: "click", index: 0 },
+    "https://example.com",
+  );
+  assert.equal(actionConfirmation(sidebar, { kind: "click", index: 0 }), null);
+  assert(
+    actionConfirmation(sidebar, { kind: "click", index: 0, effect: "unknown" }),
+  );
+  assert(
+    !requestAllowed(
+      "https://example.com/resource",
+      "DELETE",
       "https://example.com",
+      false,
+    ),
+  );
+  assert(
+    requestAllowed(
+      "https://example.com/resource",
+      "DELETE",
+      "https://example.com",
+      false,
+      true,
+    ),
+  );
+  assert(
+    !requestAllowed(
+      "https://example.com/graphql",
+      "POST",
+      "https://example.com",
+      false,
+      false,
+      '{"query":"mutation { removeItem }"}',
     ),
   );
   assert.throws(() =>
@@ -288,6 +331,93 @@ test("cancelling discovery aborts the model and keeps evidence without approving
   assert.equal(result.run?.captureIds.length, 1);
   assert.equal(result.activeReportId, null);
   assert.equal(released, 1);
+  await service.close();
+  db.close();
+});
+
+test("ordinary action failures re-observe and continue without manual intervention", async () => {
+  const { db, projects, p } = fixture();
+  let decisions = 0,
+    actions = 0;
+  const browser = {
+    open: async () => {},
+    begin: async () => page.url,
+    observe: async () => ({ ...page, png: new Uint8Array([1]) }),
+    action: async () => {
+      actions++;
+      if (actions === 1) throw new Error("元素已变化");
+    },
+    manual: async () => {},
+    close: () => {},
+  };
+  let service: DiscoveryService;
+  service = new DiscoveryService(projects, browser, async (_id, prompt) => {
+    if (prompt.startsWith("PRODUCK_DISCOVERY_REPORT"))
+      return JSON.stringify(output(service.state(p.id).run!));
+    decisions++;
+    if (decisions === 2) assert(prompt.includes("元素已变化"));
+    return JSON.stringify({
+      observation: "导航",
+      action:
+        decisions === 3
+          ? { kind: "finish", reason: "已完成" }
+          : { kind: "click", index: 0, effect: "read" },
+    });
+  });
+  await service.start(p.id, "自主探索", 5);
+  for (let i = 0; i < 100 && service.state(p.id).run?.state === "running"; i++)
+    await new Promise((r) => setTimeout(r, 10));
+  assert.equal(service.state(p.id).run?.state, "draft");
+  assert.equal(actions, 2);
+  assert(service.state(p.id).run!.steps[0].result.includes("重新观察"));
+  await service.close();
+  db.close();
+});
+
+test("business actions are not replayed after a paused task resumes", async () => {
+  const { db, projects, p } = fixture();
+  let decisions = 0,
+    actions = 0;
+  const browser = {
+    open: async () => {},
+    begin: async () => page.url,
+    observe: async () => ({ ...page, png: new Uint8Array([1]) }),
+    action: async () => {
+      actions++;
+    },
+    manual: async () => {},
+    close: () => {},
+  };
+  let service: DiscoveryService;
+  service = new DiscoveryService(projects, browser, async (_id, prompt) => {
+    if (prompt.startsWith("PRODUCK_DISCOVERY_REPORT"))
+      return JSON.stringify(output(service.state(p.id).run!));
+    decisions++;
+    if (decisions === 2) throw new Error("模拟断网");
+    return JSON.stringify({
+      observation: "业务操作",
+      action:
+        decisions === 4
+          ? { kind: "finish", reason: "继续其他入口" }
+          : { kind: "click", index: 1, effect: "write" },
+    });
+  });
+  const run = await service.start(p.id, "自主体验", 6);
+  async function settle() {
+    for (
+      let i = 0;
+      i < 100 && service.state(p.id).run?.state === "running";
+      i++
+    )
+      await new Promise((r) => setTimeout(r, 10));
+  }
+  await settle();
+  assert.equal(service.state(p.id).run?.state, "paused");
+  assert.equal(actions, 1);
+  await service.resume(p.id, run.id);
+  await settle();
+  assert.equal(service.state(p.id).run?.state, "draft");
+  assert.equal(actions, 1);
   await service.close();
   db.close();
 });

@@ -53,6 +53,20 @@ export function registerWorkbenchIpc(
     projects,
     new ChromeDiscoveryBrowser(
       join(app.getPath("userData"), "chrome-profiles"),
+      async (detail, signal) => {
+        const win = getWindow();
+        if (!win || win.isDestroyed() || signal.aborted) return false;
+        const result = await dialog.showMessageBox(win, {
+          type: "question",
+          buttons: ["跳过，继续探索", "确认，由 Agent 执行一次"],
+          defaultId: 0,
+          cancelId: 0,
+          signal,
+          message: "是否允许这次业务操作？",
+          detail: `项目：${projects.get(detail.projectId).name}\n页面：${detail.page}\n${detail.message}\n确认后由 Agent 操作浏览器；跳过后继续探索其他入口。`,
+        });
+        return !signal.aborted && result.response === 1;
+      },
     ),
     discoveryModel(models),
   );

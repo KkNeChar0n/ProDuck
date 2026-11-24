@@ -12,6 +12,9 @@ import { PrototypeRepository } from "../dist/prototypes/repository.js";
 import { PrototypeGenerator } from "../dist/agent/prototype-generator.js";
 const root = mkdtempSync(join(tmpdir(), "produck-chrome-test-"));
 let writes = 0,
+  queries = 0,
+  confirmations = 0,
+  allowBusiness = false,
   generatorPrompt = "";
 const server = createServer((req, res) => {
   if (req.method === "POST" && req.url === "/login") {
@@ -20,6 +23,11 @@ const server = createServer((req, res) => {
       "fixture=logged-in; SameSite=Lax; Max-Age=86400",
     );
     res.end("ok");
+    return;
+  }
+  if (req.url === "/query") {
+    queries++;
+    res.end("查询完成");
     return;
   }
   if (req.url === "/write") {
@@ -45,7 +53,7 @@ const server = createServer((req, res) => {
   }
   res.setHeader("Content-Type", "text/html;charset=utf-8");
   res.end(
-    `<!doctype html><html><head><title>${req.url === "/orders" ? "订单模块" : "客户模块"}</title></head><body><nav><a href="/">客户模块</a><a href="/orders">订单模块</a></nav><h1>${req.url === "/orders" ? "订单管理" : "客户管理"}</h1><input type="search" placeholder="搜索客户"><button onclick="document.querySelector('#detail').hidden=false">查看详情</button><div id="detail" hidden>客户拥有多个订单</div><button onclick="fetch('/write',{method:'POST'})">保存客户</button><p>登录状态：${req.headers.cookie?.includes("fixture=logged-in") ? "已登录" : "未登录"}</p></body></html>`,
+    `<!doctype html><html><head><title>${req.url === "/orders" ? "订单模块" : "客户模块"}</title></head><body><button onclick="document.querySelector('nav').hidden=!document.querySelector('nav').hidden">切换侧边栏</button><nav hidden><a href="/">客户模块</a><a href="/orders">订单模块</a></nav><h1>${req.url === "/orders" ? "订单管理" : "客户管理"}</h1><input type="search" placeholder="搜索客户"><input aria-label="备注"><button onclick="fetch('/query',{method:'POST'}).then(r=>r.text()).then(t=>document.querySelector('#query-result').textContent=t)">应用</button><p id="query-result"></p><button onclick="document.querySelector('#detail').hidden=false">查看详情</button><div id="detail" hidden>客户拥有多个订单</div><button onclick="fetch('/write',{method:'POST'})">保存客户</button><p>登录状态：${req.headers.cookie?.includes("fixture=logged-in") ? "已登录" : "未登录"}</p></body></html>`,
   );
 });
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
@@ -55,7 +63,10 @@ const projects = new ProjectRepository(db, join(root, "state"));
 const a = projects.create("产品理解测试", root),
   b = projects.create("隔离项目", root);
 const release = projects.createRelease(a.id, "V1.0.0");
-const browser = new ChromeDiscoveryBrowser(join(root, "chrome"));
+const browser = new ChromeDiscoveryBrowser(join(root, "chrome"), async () => {
+  confirmations++;
+  return allowBusiness;
+});
 let service;
 try {
   await browser.open(a.id, url);
@@ -87,23 +98,19 @@ try {
     if (prompt.startsWith("PRODUCK_DISCOVERY_STEP")) {
       call++;
       const evidence = JSON.parse(prompt.split("页面证据：")[1]);
+      const labels = ["切换侧边栏", "查看详情", "订单模块"];
       const action =
-        call === 1
+        call <= 3
           ? {
               kind: "click",
-              index: evidence.elements.find((e) => e.label === "查看详情")
+              index: evidence.elements.find((e) => e.label === labels[call - 1])
                 .index,
+              effect: "read",
             }
-          : call === 2
-            ? {
-                kind: "click",
-                index: evidence.elements.find((e) => e.label === "订单模块")
-                  .index,
-              }
-            : { kind: "finish", reason: "两个模块已观察，提交流程未体验" };
+          : { kind: "finish", reason: "两个模块已观察，提交流程未体验" };
       return JSON.stringify({
         observation:
-          call < 3
+          call < 4
             ? "客户模块：查看详情展示客户与订单关系"
             : "订单模块：有订单列表入口",
         action,
@@ -128,7 +135,7 @@ try {
           name: "订单",
           understanding: "订单列表；状态规则来自交接资料",
           flows: ["导航订单模块→订单页面"],
-          evidenceIds: [run.captureIds[2]],
+          evidenceIds: [run.captureIds[3]],
           unknowns: ["支付流程未体验"],
         },
       ],
@@ -144,7 +151,7 @@ try {
     if (result.run.state !== "running") break;
   }
   assert.equal(result.run.state, "draft", result.run.message);
-  assert.equal(result.run.captureIds.length, 3);
+  assert.equal(result.run.captureIds.length, 4);
   assert.equal(result.activeReportId, null);
   const report = result.reports[0];
   assert(report.markdown.includes("客户"));
@@ -181,7 +188,7 @@ try {
     undefined,
     { understanding: { id: report.id, digest: report.digest } },
   );
-  assert.equal(candidate.sourceRefs.length, 3);
+  assert.equal(candidate.sourceRefs.length, 4);
   assert.equal(candidate.approved, false);
   assert(generatorPrompt.includes("已审核产品理解"));
   assert(generatorPrompt.includes("客户与订单管理产品"));
@@ -191,6 +198,77 @@ try {
     report.digest,
   );
   await browser.begin(a.id);
+  let observed = await browser.observe(a.id);
+  const apply = observed.elements.find((e) => e.label === "应用");
+  await browser.action(
+    a.id,
+    observed,
+    { kind: "click", index: apply.index, effect: "read" },
+    new AbortController().signal,
+  );
+  assert.equal(queries, 1);
+  assert.equal(confirmations, 0);
+  observed = await browser.observe(a.id);
+  assert(observed.text.includes("查询完成"));
+  const note = observed.elements.find((e) => e.label === "备注");
+  await browser.action(
+    a.id,
+    observed,
+    { kind: "fill", index: note.index, value: "模拟输入", effect: "read" },
+    new AbortController().signal,
+  );
+  observed = await browser.observe(a.id);
+  await browser.action(
+    a.id,
+    observed,
+    { kind: "press", index: note.index, key: "Tab", effect: "read" },
+    new AbortController().signal,
+  );
+  observed = await browser.observe(a.id);
+  const save = observed.elements.find((e) => e.label === "保存客户");
+  await assert.rejects(
+    browser.action(
+      a.id,
+      observed,
+      { kind: "click", index: save.index, effect: "write" },
+      new AbortController().signal,
+    ),
+    /跳过/,
+  );
+  assert.equal(confirmations, 1);
+  assert.equal(writes, 0);
+  await assert.rejects(
+    browser.action(
+      a.id,
+      observed,
+      { kind: "click", index: save.index, effect: "write" },
+      new AbortController().signal,
+    ),
+    /跳过/,
+  );
+  assert.equal(confirmations, 1);
+  await browser.manual(a.id);
+  await browser.begin(a.id);
+  allowBusiness = true;
+  observed = await browser.observe(a.id);
+  await browser.action(
+    a.id,
+    observed,
+    { kind: "click", index: save.index, effect: "write" },
+    new AbortController().signal,
+  );
+  assert.equal(writes, 1);
+  assert.equal(confirmations, 2);
+  observed = await browser.observe(a.id);
+  await assert.rejects(
+    browser.action(
+      a.id,
+      observed,
+      { kind: "click", index: save.index, effect: "write" },
+      new AbortController().signal,
+    ),
+    /不自动重复/,
+  );
   await session.pipe.send(
     "Runtime.evaluate",
     {
@@ -199,7 +277,7 @@ try {
     },
     session.session,
   );
-  assert.equal(writes, 0);
+  assert.equal(writes, 1);
   assert(
     (await browser.observe(a.id)).blocked.some((x) => x.startsWith("POST")),
   );
@@ -218,12 +296,17 @@ try {
         checkedAt: new Date().toISOString(),
         chrome: true,
         modules: 2,
-        captures: 3,
+        captures: 4,
         profileIsolation: true,
         loginRetained: true,
-        writesBlocked: true,
+        unapprovedWritesBlocked: true,
+        confirmedWriteOnce: true,
+        sidebarAutomatic: true,
+        postQuery: true,
+        genericInput: true,
+        keyboard: true,
         approvedUnderstanding: true,
-        candidateSources: 3,
+        candidateSources: 4,
         model: "synthetic fixture; not a real model quality assessment",
       },
       null,

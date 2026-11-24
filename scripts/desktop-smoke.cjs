@@ -16,6 +16,8 @@ let server,
   credentialRef,
   platformCredentialRef,
   yunxiaoCredentialRef,
+  discoveryCalls = 0,
+  browserConfirmations = 0,
   plannerCalls = 0,
   builtinCalls = 0,
   builtinArgs,
@@ -193,8 +195,11 @@ const wait = async (w, expression) => {
     assert(
       options.buttons.includes("确认发布到飞书") ||
         options.buttons.includes("确认同步云效") ||
-        options.buttons.includes("授权并运行 Python"),
+        options.buttons.includes("授权并运行 Python") ||
+        options.buttons.includes("确认，由 Agent 执行一次"),
     );
+    if (options.buttons.includes("确认，由 Agent 执行一次"))
+      browserConfirmations++;
     return { response: 1, checkboxChecked: false };
   };
   await import(pathToFileURL(applicationFile("dist/desktop/main.js")).href);
@@ -345,12 +350,23 @@ const wait = async (w, expression) => {
         }
         if (data.messages[0].content.startsWith("PRODUCK_DISCOVERY_STEP")) {
           assert(data.messages[0].content.includes("客户筛选规则"));
+          discoveryCalls++;
+          const page = JSON.parse(
+            data.messages[0].content.split("页面证据：")[1],
+          );
+          const target = page.elements.find(
+            (e) => e.label === (discoveryCalls === 1 ? "新增客户" : "保存"),
+          );
           content = JSON.stringify({
-            observation: "客户模块提供列表、搜索与新增入口；提交未体验",
-            action: {
-              kind: "finish",
-              reason: "已记录客户模块，保存操作留待人工体验",
-            },
+            observation: "客户模块提供列表、搜索与新增入口",
+            action:
+              discoveryCalls <= 2
+                ? {
+                    kind: "click",
+                    index: target.index,
+                    effect: discoveryCalls === 1 ? "read" : "write",
+                  }
+                : { kind: "finish", reason: "已体验新增弹窗，字段规则待核对" },
           });
         } else if (
           data.messages[0].content.startsWith("PRODUCK_DISCOVERY_REPORT")
@@ -1312,7 +1328,7 @@ const wait = async (w, expression) => {
   );
   await wait(window, `document.body.innerText.includes('Chrome 已打开')`);
   await wc.executeJavaScript(
-    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='已登录，开始理解产品').click()`,
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='授权并开始自动体验').click()`,
   );
   await wait(
     window,
@@ -1323,6 +1339,7 @@ const wait = async (w, expression) => {
     `window.produck.discovery.state(${JSON.stringify(firstRelease.id)})`,
   );
   assert.equal(draftUnderstanding.activeReportId, null);
+  assert.equal(browserConfirmations, 1);
   assert(draftUnderstanding.reports[0].markdown.includes("客户模块"));
   await wc.executeJavaScript(
     `{const e=document.querySelector('[aria-label="模块理解 Markdown"]');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(e,e.value+${JSON.stringify("\n人工核对：客户模块需保留搜索。")});e.dispatchEvent(new Event('input',{bubbles:true}));}`,

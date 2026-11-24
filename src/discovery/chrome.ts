@@ -4,7 +4,11 @@ import { homedir } from "node:os";
 import { createHash } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { CdpPipe } from "./cdp-pipe.js";
-import { requestAllowed, validateDiscoveryAction } from "./browser-policy.js";
+import {
+  requestAllowed,
+  validateDiscoveryAction,
+  actionConfirmation,
+} from "./browser-policy.js";
 import { parseWebDestination } from "../desktop/navigation.js";
 import type { DiscoveryAction, DiscoveryPage } from "../contracts/discovery.js";
 export interface DiscoveryBrowser {
@@ -22,9 +26,9 @@ export interface DiscoveryBrowser {
 }
 const inspect = `(() => {
   const visible = e => { const r = e.getBoundingClientRect(); const s = getComputedStyle(e); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
-  const all = [...document.querySelectorAll('a,button,input,select,textarea,[role="button"],[role="tab"],[role="treeitem"],summary')].filter(e => visible(e) && !e.disabled && !['password','hidden','file'].includes(e.type)).slice(0,160);
+  const all = [...document.querySelectorAll('a,button,input,select,textarea,[role="button"],[role="tab"],[role="treeitem"],[role="menuitem"],[role="link"],[role="combobox"],[role="option"],[role="checkbox"],[role="radio"],[tabindex],[onclick],summary')].filter(e => visible(e) && !e.disabled && !['password','hidden','file'].includes(e.type)).slice(0,160);
   globalThis.__produckDiscoveryNodes = all;
-  const elements = all.map((e,index) => ({index, tag:e.tagName, role:e.getAttribute('role') || '', type:e.type || '', label:(e.getAttribute('aria-label') || e.getAttribute('placeholder') || e.innerText || e.getAttribute('title') || e.getAttribute('name') || '').slice(0,200), ...(e.tagName === 'A' && e.href ? {href:e.href} : {}), ...(e.tagName === 'SELECT' ? {options:[...e.options].map(o=>o.value).slice(0,80)} : {})}));
+  const elements = all.map((e,index) => ({index, tag:e.tagName, role:e.getAttribute('role') || '', type:e.type || '', inForm:!!e.form, submitsForm:!!e.form && ['BUTTON','INPUT'].includes(e.tagName) && e.type==='submit', label:(e.getAttribute('aria-label') || e.getAttribute('placeholder') || e.innerText || e.getAttribute('title') || e.getAttribute('name') || '').slice(0,200), ...(e.tagName === 'A' && e.href ? {href:e.href} : {}), ...(e.tagName === 'SELECT' ? {options:[...e.options].map(o=>o.value).slice(0,80)} : {})}));
   const structure = JSON.stringify([...document.body.querySelectorAll('*')].filter(visible).slice(0,350).map(e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect();return {tag:e.tagName, text:e.children.length?undefined:e.textContent?.slice(0,120), role:e.getAttribute('role'), box:{x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)}, style:{color:s.color,background:s.backgroundColor,font:s.font,padding:s.padding,display:s.display,border:s.border}, checked:e.checked, selected:e.tagName==='SELECT'?e.selectedIndex:undefined};}));
   return {title:document.title.slice(0,300),url:location.href,text:document.body.innerText.slice(0,14000),structure:structure.slice(0,45000),elements};
 })()`;
@@ -34,12 +38,21 @@ interface Session {
   session: string;
   origin?: string;
   blocked: string[];
+  writeAllowed: boolean;
+  attempted: Set<string>;
+  denied: Set<string>;
 }
 /** One user-visible Chrome process per project, private pipe and private profile. */
 export class ChromeDiscoveryBrowser implements DiscoveryBrowser {
   private sessions = new Map<string, Session>();
   private opening = new Set<string>();
-  constructor(private profiles: string) {}
+  constructor(
+    private profiles: string,
+    private confirm: (
+      detail: { projectId: string; page: string; message: string },
+      signal: AbortSignal,
+    ) => Promise<boolean> = async () => false,
+  ) {}
   private current(id: string) {
     const s = this.sessions.get(id);
     if (!s?.pipe.alive)
@@ -96,7 +109,15 @@ export class ChromeDiscoveryBrowser implements DiscoveryBrowser {
             targetId,
             flatten: true,
           });
-          s = { pipe, target: targetId, session: sessionId, blocked: [] };
+          s = {
+            pipe,
+            target: targetId,
+            session: sessionId,
+            blocked: [],
+            writeAllowed: false,
+            attempted: new Set(),
+            denied: new Set(),
+          };
           this.sessions.set(id, s);
           const current = s;
           pipe.onEvent = (message) => {
@@ -109,6 +130,8 @@ export class ChromeDiscoveryBrowser implements DiscoveryBrowser {
                   request.method,
                   current.origin,
                   resourceType === "Document",
+                  current.writeAllowed,
+                  request.postData ?? "",
                 );
               if (!allowed && current.blocked.length < 30) {
                 let label = "请求";
@@ -183,6 +206,9 @@ export class ChromeDiscoveryBrowser implements DiscoveryBrowser {
     const url = parseWebDestination(await this.evaluate(s, "location.href"));
     s.origin = new URL(url).origin;
     s.blocked = [];
+    s.writeAllowed = false;
+    s.denied.clear();
+    s.attempted.clear();
     await s.pipe
       .send("Browser.setPermission", {
         permission: { name: "notifications" },
@@ -234,39 +260,118 @@ export class ChromeDiscoveryBrowser implements DiscoveryBrowser {
     if (!s.origin) throw new Error("自动探索已暂停");
     validateDiscoveryAction(page, action, s.origin);
     if (action.kind === "finish") return;
+    const confirmation = actionConfirmation(page, action);
+    const element =
+      "index" in action
+        ? page.elements.find((e) => e.index === action.index)
+        : undefined;
+    const key = JSON.stringify({
+      url: page.url,
+      kind: action.kind,
+      label: element?.label,
+      tag: element?.tag,
+      href: element?.href,
+    });
+    if (confirmation) {
+      if (s.attempted.has(key))
+        throw new Error("此业务操作已尝试，不自动重复；请继续其他页面");
+      if (s.denied.has(key))
+        throw new Error("用户已跳过此业务操作，请选择其他入口");
+      const allowed = await this.confirm(
+        {
+          projectId: id,
+          page: `${page.title} · ${new URL(page.url).origin}${new URL(page.url).pathname}`,
+          message: confirmation,
+        },
+        signal,
+      );
+      signal.throwIfAborted();
+      if (!allowed) {
+        s.denied.add(key);
+        throw new Error("用户跳过此业务操作，请继续其他入口");
+      }
+    }
     const now = await this.observe(id);
     signal.throwIfAborted();
-    if (now.fingerprint !== page.fingerprint)
-      throw new Error("页面在观察后发生变化，请重新观察后继续");
-    let expression = "";
-    if (action.kind === "back") {
-      const history = await s.pipe.send(
-        "Page.getNavigationHistory",
-        {},
-        s.session,
-      );
-      const entry = history.entries[history.currentIndex - 1];
-      if (!entry || !requestAllowed(entry.url, "GET", s.origin, true))
-        throw new Error("没有可返回的同站页面");
-      await s.pipe.send(
-        "Page.navigateToHistoryEntry",
-        { entryId: entry.id },
-        s.session,
-      );
-    } else {
-      if (action.kind === "scroll")
-        expression = `scrollBy(0,${action.direction === "down" ? "innerHeight*0.8" : "-innerHeight*0.8"})`;
-      else {
-        const target = `globalThis.__produckDiscoveryNodes[${action.index}]`;
-        if (action.kind === "click") expression = `${target}.click()`;
-        else if (action.kind === "fill")
-          expression = `(()=>{const e=${target};const p=e instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(p,'value').set.call(e,${JSON.stringify(action.value)});e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));})()`;
-        else
-          expression = `(()=>{const e=${target};e.value=${JSON.stringify(action.value)};e.dispatchEvent(new Event('change',{bubbles:true}));})()`;
+    if (
+      confirmation
+        ? now.fingerprint !== page.fingerprint
+        : now.url !== page.url ||
+          (element &&
+            JSON.stringify(
+              now.elements.find((e) => e.index === element.index),
+            ) !== JSON.stringify(element))
+    )
+      throw new Error("目标在观察后发生变化，重新观察后选择目标");
+    if (confirmation) s.attempted.add(key);
+    s.writeAllowed = !!confirmation;
+    try {
+      let expression = "";
+      if (action.kind === "back") {
+        const history = await s.pipe.send(
+          "Page.getNavigationHistory",
+          {},
+          s.session,
+        );
+        const entry = history.entries[history.currentIndex - 1];
+        if (!entry || !requestAllowed(entry.url, "GET", s.origin, true))
+          throw new Error("没有可返回的同站页面");
+        await s.pipe.send(
+          "Page.navigateToHistoryEntry",
+          { entryId: entry.id },
+          s.session,
+        );
+      } else {
+        if (action.kind === "scroll")
+          expression = `scrollBy(0,${action.direction === "down" ? "innerHeight*0.8" : "-innerHeight*0.8"})`;
+        else {
+          const target = `globalThis.__produckDiscoveryNodes[${action.index}]`;
+          if (action.kind === "click") expression = `${target}.click()`;
+          else if (action.kind === "fill")
+            expression = `(()=>{const e=${target};const p=e instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(p,'value').set.call(e,${JSON.stringify(action.value)});e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));})()`;
+          else if (action.kind === "press") {
+            await this.evaluate(s, `${target}.focus()`);
+            const key = action.key === "Space" ? " " : action.key;
+            const keyCode = {
+              Enter: 13,
+              Escape: 27,
+              Tab: 9,
+              ArrowDown: 40,
+              ArrowUp: 38,
+              ArrowLeft: 37,
+              ArrowRight: 39,
+              Space: 32,
+            }[action.key];
+            await s.pipe.send(
+              "Input.dispatchKeyEvent",
+              {
+                type: "keyDown",
+                key,
+                code: action.key,
+                windowsVirtualKeyCode: keyCode,
+              },
+              s.session,
+            );
+            await s.pipe.send(
+              "Input.dispatchKeyEvent",
+              {
+                type: "keyUp",
+                key,
+                code: action.key,
+                windowsVirtualKeyCode: keyCode,
+              },
+              s.session,
+            );
+            expression = "true";
+          } else
+            expression = `(()=>{const e=${target};e.value=${JSON.stringify(action.value)};e.dispatchEvent(new Event('change',{bubbles:true}));})()`;
+        }
+        await this.evaluate(s, expression);
       }
-      await this.evaluate(s, expression);
+      await delay(650, undefined, { signal });
+    } finally {
+      s.writeAllowed = false;
     }
-    await delay(650, undefined, { signal });
   }
   async manual(id: string) {
     const s = this.sessions.get(id);
@@ -274,6 +379,7 @@ export class ChromeDiscoveryBrowser implements DiscoveryBrowser {
     // Disable interception before relinquishing control; failures are surfaced to caller.
     await s.pipe.send("Fetch.disable", {}, s.session);
     s.origin = undefined;
+    s.writeAllowed = false;
     await s.pipe
       .send("Page.setInterceptFileChooserDialog", { enabled: false }, s.session)
       .catch(() => {});
