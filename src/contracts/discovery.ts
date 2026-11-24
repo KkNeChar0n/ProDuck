@@ -8,6 +8,22 @@ export interface DiscoveryElement {
   options?: string[];
   submitsForm?: boolean;
   inForm?: boolean;
+  value?: string;
+  checked?: boolean;
+  required?: boolean;
+  valid?: boolean;
+  validationMessage?: string;
+  form?: {
+    key: string;
+    action: string;
+    method: string;
+    search: boolean;
+    submitLabels: string[];
+    sensitive: boolean;
+    valid: boolean;
+    noValidate: boolean;
+  };
+  skipsValidation?: boolean;
 }
 export interface DiscoveryPage {
   title: string;

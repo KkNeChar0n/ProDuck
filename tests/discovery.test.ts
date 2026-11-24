@@ -14,6 +14,7 @@ import {
 import { UnderstandingRepository } from "../src/discovery/repository.js";
 import {
   actionConfirmation,
+  businessActionIdentity,
   requestAllowed,
   validateDiscoveryAction,
 } from "../src/discovery/browser-policy.js";
@@ -418,6 +419,143 @@ test("business actions are not replayed after a paused task resumes", async () =
   await settle();
   assert.equal(service.state(p.id).run?.state, "draft");
   assert.equal(actions, 1);
+  await service.close();
+  db.close();
+});
+
+const formPage: DiscoveryPage = {
+  ...page,
+  elements: [
+    {
+      index: 0,
+      tag: "INPUT",
+      role: "",
+      type: "text",
+      label: "客户名称",
+      inForm: true,
+    },
+    {
+      index: 1,
+      tag: "BUTTON",
+      role: "",
+      type: "submit",
+      label: "保存",
+      inForm: true,
+      submitsForm: true,
+    },
+  ].map((e) => ({
+    ...e,
+    form: {
+      key: "#customer-form",
+      action: "https://example.com/",
+      method: "get",
+      search: false,
+      submitLabels: ["保存"],
+      sensitive: false,
+      valid: true,
+      noValidate: false,
+    },
+  })),
+};
+test("search classification uses host evidence, while business identity spans submit buttons and Enter", () => {
+  const query: DiscoveryPage = {
+    ...formPage,
+    elements: formPage.elements.map((e) => ({
+      ...e,
+      label: e.index === 0 ? "搜索客户" : "搜索",
+      form: { ...e.form!, search: true, submitLabels: ["搜索"] },
+    })),
+  };
+  assert.equal(
+    actionConfirmation(query, { kind: "click", index: 1, effect: "read" }),
+    null,
+  );
+  assert.equal(
+    actionConfirmation(query, {
+      kind: "press",
+      index: 0,
+      key: "Enter",
+      effect: "read",
+    }),
+    null,
+  );
+  assert(
+    actionConfirmation(query, { kind: "click", index: 1, effect: "write" }),
+  );
+  assert(
+    actionConfirmation(formPage, {
+      kind: "press",
+      index: 0,
+      key: "Enter",
+      effect: "read",
+    }),
+  );
+  assert.equal(
+    businessActionIdentity(formPage, { kind: "click", index: 1 }),
+    businessActionIdentity(formPage, { kind: "press", index: 0, key: "Enter" }),
+  );
+  const unsafe = {
+    ...query,
+    elements: query.elements.map((e) => ({
+      ...e,
+      form: { ...e.form!, action: "https://example.com/delete/1" },
+    })),
+  };
+  assert(
+    actionConfirmation(unsafe, { kind: "click", index: 1, effect: "read" }),
+  );
+});
+test("no-dispatch validation permits later submission; persisted intent blocks alternative entry after resume", async () => {
+  const { db, projects, p } = fixture();
+  let decisions = 0,
+    actions = 0;
+  const browser = {
+    open: async () => {},
+    begin: async () => page.url,
+    observe: async () => ({ ...formPage, png: new Uint8Array([1]) }),
+    action: async () => {
+      actions++;
+      if (actions === 1) return { status: "validation-blocked" as const };
+    },
+    manual: async () => {},
+    close: () => {},
+  };
+  let service: DiscoveryService;
+  service = new DiscoveryService(projects, browser, async (_id, prompt) => {
+    if (prompt.startsWith("PRODUCK_DISCOVERY_REPORT"))
+      return JSON.stringify(output(service.state(p.id).run!));
+    decisions++;
+    if (decisions === 3) throw new Error("模拟断网");
+    return JSON.stringify({
+      observation: "表单",
+      action:
+        decisions === 5
+          ? { kind: "finish", reason: "已记录" }
+          : decisions === 4
+            ? { kind: "press", index: 0, key: "Enter", effect: "write" }
+            : { kind: "click", index: 1, effect: "write" },
+    });
+  });
+  const run = await service.start(p.id, "验证表单", 8);
+  const settle = async () => {
+    for (
+      let i = 0;
+      i < 100 && service.state(p.id).run?.state === "running";
+      i++
+    )
+      await new Promise((r) => setTimeout(r, 10));
+  };
+  await settle();
+  assert.equal(service.state(p.id).run?.state, "paused");
+  assert.equal(actions, 2);
+  assert.equal(service.state(p.id).run!.steps[0].businessActionKey, undefined);
+  assert(
+    service.state(p.id).run!.steps[1].businessActionKey?.startsWith("v2:"),
+  );
+  await service.resume(p.id, run.id);
+  await settle();
+  assert.equal(service.state(p.id).run?.state, "draft");
+  assert.equal(actions, 2);
   await service.close();
   db.close();
 });

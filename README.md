@@ -89,7 +89,7 @@ python3 tests/prototype_smoke.py
 npm run package:mac
 ```
 
-输出 `release/Produck-0.1.20-arm64-test.dmg`，包含 Electron、编译后的钥匙串程序与应用资源。目标最低系统为 macOS 13，当前只在 macOS 26.3 arm64 上构建和检查；尚未在最低系统或无开发工具的机器完成验收。
+输出 `release/Produck-0.1.21-arm64-test.dmg`，包含 Electron、编译后的钥匙串程序与应用资源。目标最低系统为 macOS 13，当前只在 macOS 26.3 arm64 上构建和检查；尚未在最低系统或无开发工具的机器完成验收。
 
 包使用临时签名，未完成 Developer ID 签名和公证，不用于公开分发。安装包未提交 Git；第三方运行组件许可证随包保存。打包验证不代表真实模型与平台集成已通过。
 

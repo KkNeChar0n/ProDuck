@@ -8,6 +8,8 @@ import {
   requestAllowed,
   validateDiscoveryAction,
   actionConfirmation,
+  businessActionIdentity,
+  isFormSubmission,
 } from "./browser-policy.js";
 import { parseWebDestination } from "../desktop/navigation.js";
 import type { DiscoveryAction, DiscoveryPage } from "../contracts/discovery.js";
@@ -20,7 +22,7 @@ export interface DiscoveryBrowser {
     page: DiscoveryPage,
     action: DiscoveryAction,
     signal: AbortSignal,
-  ): Promise<void>;
+  ): Promise<void | { status: "validation-blocked" }>;
   manual(id: string): Promise<void>;
   close(): Promise<void> | void;
 }
@@ -28,7 +30,13 @@ const inspect = `(() => {
   const visible = e => { const r = e.getBoundingClientRect(); const s = getComputedStyle(e); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
   const all = [...document.querySelectorAll('a,button,input,select,textarea,[role="button"],[role="tab"],[role="treeitem"],[role="menuitem"],[role="link"],[role="combobox"],[role="option"],[role="checkbox"],[role="radio"],[tabindex],[onclick],summary')].filter(e => visible(e) && !e.disabled && !['password','hidden','file'].includes(e.type)).slice(0,160);
   globalThis.__produckDiscoveryNodes = all;
-  const elements = all.map((e,index) => ({index, tag:e.tagName, role:e.getAttribute('role') || '', type:e.type || '', inForm:!!e.form, submitsForm:!!e.form && ['BUTTON','INPUT'].includes(e.tagName) && e.type==='submit', label:(e.getAttribute('aria-label') || e.getAttribute('placeholder') || e.innerText || e.getAttribute('title') || e.getAttribute('name') || '').slice(0,200), ...(e.tagName === 'A' && e.href ? {href:e.href} : {}), ...(e.tagName === 'SELECT' ? {options:[...e.options].map(o=>o.value).slice(0,80)} : {})}));
+  const label = e => (e.getAttribute('aria-label') || [...(e.labels || [])].map(l=>l.textContent).join(' ') || e.getAttribute('placeholder') || e.innerText || e.getAttribute('title') || e.getAttribute('name') || '').trim().slice(0,200);
+  const formInfo = f => {
+    const fields = [...f.elements];
+    const path = e => { const parts=[]; for(;e && e.nodeType===1;e=e.parentElement){if(e.id){parts.unshift('#'+e.id);break;}parts.unshift(e.tagName+':'+[...e.parentElement?.children||[]].indexOf(e));}return parts.join('/'); };
+    return {key:path(f),action:f.action,method:f.method,search:f.getAttribute('role')==='search' || fields.some(e=>e.type==='search' || /搜索|查询|筛选|search|filter/i.test(label(e))),submitLabels:fields.filter(e=>e.type==='submit').map(label),sensitive:fields.some(e=>['password','file'].includes(e.type)),valid:fields.every(e=>!e.willValidate || e.validity.valid),noValidate:f.noValidate};
+  };
+  const elements = all.map((e,index) => ({index, tag:e.tagName, role:e.getAttribute('role') || '', type:e.type || '', inForm:!!e.form, submitsForm:!!e.form && ['BUTTON','INPUT'].includes(e.tagName) && e.type==='submit', label:label(e), ...(e.form ? {form:formInfo(e.form),skipsValidation:!!e.formNoValidate}:{}), ...(['INPUT','TEXTAREA','SELECT'].includes(e.tagName)?{value:String(e.value).slice(0,2000),checked:!!e.checked,required:!!e.required,valid:!e.willValidate || e.validity.valid,validationMessage:e.validationMessage?.slice(0,300)||''}:{}), ...(e.tagName === 'A' && e.href ? {href:e.href} : {}), ...(e.tagName === 'SELECT' ? {options:[...e.options].map(o=>o.value).slice(0,80)} : {})}));
   const structure = JSON.stringify([...document.body.querySelectorAll('*')].filter(visible).slice(0,350).map(e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect();return {tag:e.tagName, text:e.children.length?undefined:e.textContent?.slice(0,120), role:e.getAttribute('role'), box:{x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)}, style:{color:s.color,background:s.backgroundColor,font:s.font,padding:s.padding,display:s.display,border:s.border}, checked:e.checked, selected:e.tagName==='SELECT'?e.selectedIndex:undefined};}));
   return {title:document.title.slice(0,300),url:location.href,text:document.body.innerText.slice(0,14000),structure:structure.slice(0,45000),elements};
 })()`;
@@ -265,13 +273,22 @@ export class ChromeDiscoveryBrowser implements DiscoveryBrowser {
       "index" in action
         ? page.elements.find((e) => e.index === action.index)
         : undefined;
-    const key = JSON.stringify({
-      url: page.url,
-      kind: action.kind,
-      label: element?.label,
-      tag: element?.tag,
-      href: element?.href,
-    });
+    const key = businessActionIdentity(page, action);
+    // Read validity without checkValidity/reportValidity: those dispatch page events.
+    // No click or key event is sent, so a later completed form may be attempted safely.
+    if (
+      isFormSubmission(element, action) &&
+      element?.form &&
+      !element.form.noValidate &&
+      !element.skipsValidation &&
+      !element.form.valid
+    ) {
+      const current = await this.observe(id);
+      signal.throwIfAborted();
+      if (current.fingerprint !== page.fingerprint)
+        throw new Error("表单已变化，请重新观察");
+      return { status: "validation-blocked" as const };
+    }
     if (confirmation) {
       if (s.attempted.has(key))
         throw new Error("此业务操作已尝试，不自动重复；请继续其他页面");
@@ -348,6 +365,11 @@ export class ChromeDiscoveryBrowser implements DiscoveryBrowser {
                 type: "keyDown",
                 key,
                 code: action.key,
+                ...(action.key === "Enter"
+                  ? { text: "\r", unmodifiedText: "\r" }
+                  : action.key === "Space"
+                    ? { text: " ", unmodifiedText: " " }
+                    : {}),
                 windowsVirtualKeyCode: keyCode,
               },
               s.session,

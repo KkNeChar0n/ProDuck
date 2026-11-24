@@ -1,4 +1,8 @@
-import type { DiscoveryAction, DiscoveryPage } from "../contracts/discovery.js";
+import type {
+  DiscoveryAction,
+  DiscoveryPage,
+  DiscoveryElement,
+} from "../contracts/discovery.js";
 import { parseWebDestination } from "../desktop/navigation.js";
 const mutation =
   /删除|保存|提交|发布|支付|购买|确认|确定|授权|退出|登出|启用|停用|禁用|发送|执行|部署|签发|吊销|续期|上传|导出|下载|重置密码|delete|remove|save|submit|publish|pay|purchase|confirm|authorize|logout|sign.?out|enable|disable|send|execute|deploy|revoke|upload|export|download/i;
@@ -92,6 +96,62 @@ export function validateDiscoveryAction(
       throw new Error("此链接超出已授权站点，请选择站内入口");
   }
 }
+export function isFormSubmission(
+  el: DiscoveryElement | undefined,
+  action: DiscoveryAction,
+) {
+  return (
+    !!el?.inForm &&
+    ((action.kind === "click" && el.submitsForm) ||
+      (action.kind === "press" &&
+        ((action.key === "Enter" && el.tag !== "TEXTAREA") ||
+          (action.key === "Space" && el.submitsForm))))
+  );
+}
+function queryForm(el: DiscoveryElement) {
+  const f = el.form;
+  if (
+    !f ||
+    !f.search ||
+    f.sensitive ||
+    !f.submitLabels.length ||
+    !f.submitLabels.every((label) =>
+      /^(搜索|查询|筛选|search|filter|find|go)$/i.test(label.trim()),
+    )
+  )
+    return false;
+  try {
+    return !mutationPath.test(new URL(f.action).pathname);
+  } catch {
+    return false;
+  }
+}
+/** The same form retains one business identity across button and keyboard entrypoints. */
+export function businessActionIdentity(
+  page: DiscoveryPage,
+  action: DiscoveryAction,
+) {
+  const el =
+    "index" in action
+      ? page.elements.find((e) => e.index === action.index)
+      : undefined;
+  return JSON.stringify(
+    isFormSubmission(el, action) && el?.form
+      ? {
+          url: page.url,
+          form: el.form.key,
+          action: el.form.action,
+          method: el.form.method,
+        }
+      : {
+          url: page.url,
+          kind: action.kind,
+          label: el?.label,
+          tag: el?.tag,
+          href: el?.href,
+        },
+  );
+}
 /** Ordinary controls need no name allowlist. Host retains final write confirmation. */
 export function actionConfirmation(
   page: DiscoveryPage,
@@ -105,18 +165,15 @@ export function actionConfirmation(
     return null;
   const el = page.elements.find((e) => e.index === action.index);
   if (!el) return null;
-  const mutatingKey =
-    action.kind === "press" && ["Enter", "Space"].includes(action.key);
+  const activating =
+    action.kind === "click" ||
+    (action.kind === "press" && ["Enter", "Space"].includes(action.key));
   if (
     action.effect === "write" ||
     action.effect === "unknown" ||
-    ((action.kind === "click" || mutatingKey) &&
+    (activating &&
       (mutation.test(el.label) ||
-        (action.kind === "click" && el.submitsForm) ||
-        (action.kind === "press" &&
-          action.key === "Enter" &&
-          el.inForm &&
-          el.tag !== "TEXTAREA") ||
+        (isFormSubmission(el, action) && !queryForm(el)) ||
         (el.href && mutationPath.test(new URL(el.href).pathname))))
   )
     return `${action.kind === "fill" ? "输入" : action.kind === "select" ? "选择" : action.kind === "press" ? `按 ${action.key}` : "点击"}「${el.label || el.tag}」可能修改业务数据或产生其他实际后果。`;

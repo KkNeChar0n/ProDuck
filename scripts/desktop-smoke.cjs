@@ -104,8 +104,9 @@ const ready = new Promise((resolve) =>
     window.webContents.once("did-finish-load", () => resolve(window)),
   ),
 );
-const wait = async (w, expression) => {
-  for (let i = 0; i < 200; i++) {
+const wait = async (w, expression, timeoutMs = 10000) => {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
     if (await w.webContents.executeJavaScript(expression)) return;
     await new Promise((r) => setTimeout(r, 50));
   }
@@ -354,19 +355,31 @@ const wait = async (w, expression) => {
           const page = JSON.parse(
             data.messages[0].content.split("页面证据：")[1],
           );
-          const target = page.elements.find(
-            (e) => e.label === (discoveryCalls === 1 ? "新增客户" : "保存"),
-          );
+          const actions = [
+            { label: "新增客户", kind: "click", effect: "read" },
+            { label: "保存", kind: "click", effect: "write" },
+            {
+              label: "客户名称",
+              kind: "fill",
+              value: "虚构客户",
+              effect: "read",
+            },
+            { label: "负责人", kind: "fill", value: "测试人", effect: "read" },
+            { label: "保存", kind: "click", effect: "write" },
+          ];
+          const next = actions[discoveryCalls - 1];
+          const target =
+            next && page.elements.find((e) => e.label === next.label);
           content = JSON.stringify({
             observation: "客户模块提供列表、搜索与新增入口",
-            action:
-              discoveryCalls <= 2
-                ? {
-                    kind: "click",
-                    index: target.index,
-                    effect: discoveryCalls === 1 ? "read" : "write",
-                  }
-                : { kind: "finish", reason: "已体验新增弹窗，字段规则待核对" },
+            action: next
+              ? {
+                  kind: next.kind,
+                  index: target.index,
+                  effect: next.effect,
+                  ...(next.value ? { value: next.value } : {}),
+                }
+              : { kind: "finish", reason: "已体验新增弹窗与校验" },
           });
         } else if (
           data.messages[0].content.startsWith("PRODUCK_DISCOVERY_REPORT")
