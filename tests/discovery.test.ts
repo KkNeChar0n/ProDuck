@@ -809,3 +809,65 @@ test("module completion summarizes before the next module acts, then budget end 
   await service.close();
   db.close();
 });
+
+test("long discovery contexts stay bounded across planning, module summary and final report", async () => {
+  const { root, db, projects, p } = fixture();
+  for (let i = 0; i < 12; i++) {
+    const file = join(root, `handoff-${i}.md`);
+    writeFileSync(file, "# 项目资料\n" + "很长的模块背景资料。".repeat(3000));
+    importSource(p.workspace, file);
+  }
+  const largePage = {
+    ...page,
+    text: "页面内容".repeat(10000),
+    elements: Array.from({ length: 220 }, (_, i) => ({
+      index: i,
+      tag: "BUTTON",
+      role: "button",
+      type: "button",
+      label: "长字段".repeat(150),
+      form: {
+        key: "x".repeat(200),
+        action: page.url,
+        method: "get",
+        search: false,
+        submitLabels: ["保存"],
+        sensitive: false,
+        valid: true,
+        noValidate: false,
+      },
+    })),
+  };
+  const browser = {
+    open: async () => {},
+    begin: async () => page.url,
+    observe: async () => ({ ...largePage, png: new Uint8Array([1]) }),
+    action: async () => {},
+    manual: async () => {},
+    close: () => {},
+  };
+  const sizes: number[] = [];
+  let service: DiscoveryService;
+  service = new DiscoveryService(projects, browser, async (_id, prompt) => {
+    sizes.push(prompt.length);
+    assert(prompt.length < 49000, `prompt ${prompt.length}`);
+    if (prompt.startsWith("PRODUCK_DISCOVERY_MODULE"))
+      return moduleReply(prompt);
+    if (prompt.startsWith("PRODUCK_DISCOVERY_REPORT"))
+      return JSON.stringify(output(service.state(p.id).run!));
+    const current = JSON.parse(prompt.split("页面证据：")[1]);
+    assert(current.elements.length > 0);
+    return JSON.stringify({
+      module: "客户",
+      observation: "已观察",
+      action: { kind: "finish", reason: "本轮预算不足" },
+    });
+  });
+  await service.start(p.id, "长任务", 3);
+  for (let i = 0; i < 200 && service.state(p.id).run?.state === "running"; i++)
+    await new Promise((r) => setTimeout(r, 10));
+  assert.equal(service.state(p.id).run?.state, "draft");
+  assert(sizes.length >= 3);
+  await service.close();
+  db.close();
+});

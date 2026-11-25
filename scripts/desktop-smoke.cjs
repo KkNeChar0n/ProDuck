@@ -713,8 +713,22 @@ const wait = async (w, expression, timeoutMs = 10000) => {
     ),
     ["标题改为客户总览", "按钮改为绿色"],
   );
+  await wait(
+    window,
+    `Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='重试原型生成' && !b.disabled)`,
+  );
   await wc.executeJavaScript(
-    `document.querySelector('[aria-label="发送修改要求"]').click()`,
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='重试原型生成').scrollIntoView({block:'center'})`,
+  );
+  await wc.executeJavaScript(
+    `new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`,
+  );
+  writeFileSync(
+    "docs/verification/desktop-prototype-retry.png",
+    (await wc.capturePage()).toPNG(),
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='重试原型生成').click()`,
   );
   await wait(
     window,
@@ -1482,6 +1496,27 @@ const wait = async (w, expression, timeoutMs = 10000) => {
   );
   writeFileSync(
     "docs/verification/desktop-discovery-modules.png",
+    (await wc.capturePage()).toPNG(),
+  );
+  assert.equal(
+    await wc.executeJavaScript(
+      `document.querySelector('[aria-label="清单验证进度"]').value`,
+    ),
+    0,
+  );
+  assert(
+    await wc.executeJavaScript(
+      `document.querySelector('[aria-label="探索进度总览"]').textContent.includes('0%')`,
+    ),
+  );
+  await wc.executeJavaScript(
+    `document.querySelector('[aria-label="探索进度总览"]').scrollIntoView({block:'start'})`,
+  );
+  await wc.executeJavaScript(
+    `new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`,
+  );
+  writeFileSync(
+    "docs/verification/desktop-discovery-progress.png",
     (await wc.capturePage()).toPNG(),
   );
   assert.equal(draftUnderstanding.activeReportId, null);

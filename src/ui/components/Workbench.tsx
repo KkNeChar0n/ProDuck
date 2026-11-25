@@ -8,6 +8,7 @@ import type {
   Capture,
   PrototypeVersion,
   GenerationProgress,
+  PrototypeTask,
 } from "../../contracts/workbench";
 import { desktop, errorText } from "../bridge";
 import { ProjectSources } from "./ProjectSources";
@@ -44,6 +45,8 @@ export function Workbench({
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [progress, setProgress] = useState<GenerationProgress | null>(null);
+  const [retryTask, setRetryTask] = useState<PrototypeTask | null>(null);
+  const latestEvent = useRef<GenerationProgress | null>(null);
   const [details, setDetails] = useState<PrototypeDetails | null>(null),
     [restored, setRestored] = useState("");
   const [stateLabel, setStateLabel] = useState(""),
@@ -91,9 +94,12 @@ export function Workbench({
     void Promise.all([
       desktop().workbench.captures(projectId),
       desktop().workbench.versions(projectId),
+      desktop().workbench.tasks(projectId),
     ])
-      .then(([c, v]) => {
+      .then(([c, v, tasks]) => {
         if (!alive.current) return;
+        if (!latestEvent.current)
+          setRetryTask(tasks[0]?.recoverable ? tasks[0] : null);
         setCaptureList(c);
         setSelectedCapture(c.at(-1)?.id ?? "");
         setVersions(v);
@@ -102,7 +108,23 @@ export function Workbench({
       .catch((e) => setError(errorText(e)));
     const unsubscribe = desktop().workbench.onProgress((event) => {
       if (event.projectId !== projectId) return;
+      latestEvent.current = event;
       setProgress(event);
+      setRetryTask(null);
+      if (event.state === "failed" || event.state === "cancelled") {
+        void desktop()
+          .workbench.tasks(projectId)
+          .then((tasks) => {
+            if (!alive.current || latestEvent.current !== event) return;
+            const task = event.runId
+              ? tasks.find((t) => t.id === event.runId)
+              : tasks[0];
+            setRetryTask(task?.recoverable ? task : null);
+          })
+          .catch((e) => {
+            if (alive.current) setError(errorText(e));
+          });
+      }
       if (event.state === "succeeded")
         void desktop()
           .workbench.versions(projectId)
@@ -580,9 +602,37 @@ export function Workbench({
               依据此状态生成原型
             </button>
           </section>
-          {progress && (
+          {(progress || retryTask) && (
             <div className="notice" role="status">
-              {progress.message} · {progress.characters.toLocaleString()} 字符
+              {progress
+                ? `${progress.message} · ${progress.characters.toLocaleString()} 字符`
+                : "上次原型生成未完成，可以从原依据重试。"}
+              {retryTask && (
+                <button
+                  disabled={busy || generating}
+                  onClick={() =>
+                    void perform(async () => {
+                      const version = await desktop().workbench.retry(
+                        projectId,
+                        retryTask.id,
+                      );
+                      setVersions(
+                        await desktop().workbench.versions(projectId),
+                      );
+                      setSelected(version.id);
+                      setTab("prototype");
+                      setRetryTask(null);
+                    })
+                  }
+                >
+                  重试原型生成
+                </button>
+              )}
+              {retryTask && (
+                <p className="muted">
+                  使用失败任务保存的页面依据和修改要求，重新生成新候选；不会覆盖旧版。
+                </p>
+              )}
               {generating && (
                 <button
                   onClick={() => void desktop().workbench.cancel(projectId)}

@@ -1,9 +1,10 @@
-import { checks, checkNames } from "../../discovery/coverage";
+import { DiscoveryProgress } from "./DiscoveryProgress";
 import { useEffect, useRef, useState } from "react";
 import type { DiscoveryState } from "../../contracts/discovery";
 import { desktop, errorText } from "../bridge";
 export function ProductDiscovery({ projectId }: { projectId: string }) {
   const reviewRef = useRef<HTMLElement>(null);
+  const restoredBudget = useRef(false);
   const [state, setState] = useState<DiscoveryState>({
     run: null,
     reports: [],
@@ -12,6 +13,17 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
   const [url, setUrl] = useState(""),
     [goal, setGoal] = useState(""),
     [budget, setBudget] = useState(40);
+  useEffect(() => {
+    if (state.run && !restoredBudget.current) {
+      restoredBudget.current = true;
+      setBudget(
+        Math.max(
+          2,
+          Math.min(120, state.run.budget - (state.run.roundStart ?? 0)),
+        ),
+      );
+    }
+  }, [state.run]);
   const [selected, setSelected] = useState(""),
     [markdown, setMarkdown] = useState("");
   const [busy, setBusy] = useState(false),
@@ -175,7 +187,10 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
       )}
       {state.run && (
         <section className="notice">
-          <strong>{state.run.message}</strong>
+          <DiscoveryProgress run={state.run} />
+          <p role="status">
+            <strong>{state.run.message}</strong>
+          </p>
           {state.run.reportId && (
             <button
               onClick={() =>
@@ -272,32 +287,6 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
               ))}
             </section>
           )}
-          {!!state.run.coverage?.length && (
-            <details open>
-              <summary>新建与编辑体验清单</summary>
-              <p className="muted">
-                按页面依据评估，未勾选不代表系统没有该功能。校验约束与页面提示行为分别核对。
-              </p>
-              {state.run.coverage.map((row) => (
-                <section key={`${row.module}-${row.flow}`}>
-                  <strong>
-                    {row.module} · {row.flow === "create" ? "新建" : "编辑"}（
-                    {row.checks.length}/5）
-                  </strong>
-                  <p>
-                    {checks
-                      .map(
-                        (c) =>
-                          `${row.checks.includes(c) ? "✓" : "○"} ${checkNames[c]}`,
-                      )
-                      .join(" · ")}
-                  </p>
-                  {row.detail && <p>{row.detail}</p>}
-                  {row.limitation && <p>未覆盖原因：{row.limitation}</p>}
-                </section>
-              ))}
-            </details>
-          )}
           <details>
             <summary>查看探索记录与未覆盖项</summary>
             {state.run.steps.map((s, i) => (
@@ -305,6 +294,14 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
                 <strong>
                   {i + 1}. {s.observation || "页面已采集"}
                 </strong>
+                <p className="muted">
+                  采集 100% · 观察决策{" "}
+                  {s.observation && s.action ? "100%" : "0%"} ·{" "}
+                  {s.action &&
+                  ["finish", "complete-module"].includes(s.action.kind)
+                    ? "无需浏览器操作"
+                    : `操作 ${s.executed ? "100%（已执行，结果仍需核对）" : "0%（未完成或已跳过）"}`}
+                </p>
                 <p>{s.result}</p>
               </section>
             ))}

@@ -25,6 +25,7 @@ export interface SurfaceBounds {
   height: number;
 }
 export interface GenerationProgress {
+  runId?: string;
   projectId: string;
   state: "running" | "succeeded" | "failed" | "cancelled";
   characters: number;

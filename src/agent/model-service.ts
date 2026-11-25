@@ -178,8 +178,12 @@ export class ModelService {
     signal?: AbortSignal,
     required: ModelCapability[] = [],
   ): Promise<ModelRequest> {
-    if (typeof prompt !== "string" || !prompt.trim() || prompt.length > 50000)
-      throw new Error("请输入 1–50000 个字符");
+    if (typeof prompt !== "string" || !prompt.trim())
+      throw new Error("模型请求内容为空");
+    if (prompt.length > 50000)
+      throw new Error(
+        "任务上下文超过50000字符，已保留已有记录；请升级应用后继续或缩小任务范围。",
+      );
     for (const capability of required)
       this.requireCapability(projectId, capability);
     const row = this.row(projectId);

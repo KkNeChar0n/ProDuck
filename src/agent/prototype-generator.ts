@@ -240,7 +240,7 @@ export class PrototypeGenerator {
       .run(stepId, runId, "running", checkpointRef, null);
     let output = "";
     const note = (state: GenerationProgress["state"], message: string) =>
-      notify({ projectId, state, characters: output.length, message });
+      notify({ projectId, runId, state, characters: output.length, message });
     try {
       note("running", "正在依据页面结构和样式生成原型（本次未发送截图）");
       const input = await this.models.request(
