@@ -45,7 +45,7 @@ export function validateDiscoveryAction(
     !["read", "write", "unknown"].includes(action.effect)
   )
     throw new Error("操作后果分类无效");
-  if (action.kind === "finish") {
+  if (action.kind === "finish" || action.kind === "complete-module") {
     if (typeof action.reason !== "string" || action.reason.length > 1000)
       throw new Error("结束说明无效");
     return;
@@ -189,6 +189,7 @@ export function actionConfirmation(
 ): string | null {
   if (
     action.kind === "finish" ||
+    action.kind === "complete-module" ||
     action.kind === "scroll" ||
     action.kind === "back"
   )

@@ -1,4 +1,12 @@
 import {
+  ensureDiscoveryModule,
+  modulePlan,
+  summarizeModule,
+  preserveModuleProgress,
+  moduleMarkdown,
+  moduleInstructions,
+} from "./modules.js";
+import {
   ensureModule,
   updateCoverage,
   coverageMarkdown,
@@ -92,6 +100,7 @@ export class DiscoveryService {
         run.state === "running" &&
         this.active.get(project.id)?.runId !== run.id
       ) {
+        preserveModuleProgress(run);
         run.state = "paused";
         run.message =
           "应用曾中断，证据已保留。打开 Chrome 后继续，或直接整理已采集内容。";
@@ -173,6 +182,8 @@ export class DiscoveryService {
     if (!Number.isInteger(budget) || budget < 2 || budget > 120)
       throw new Error("本轮新增步数须为 2–120");
     const parent = this.memory.run(scope, runId);
+    if (parent.state === "paused" && !parent.reportId)
+      return this.resume(scope, runId, false, budget);
     if (parent.state !== "draft" || !parent.reportId)
       throw new Error("请先结束或整理当前轮次，再继续探索");
     const previous = this.memory
@@ -198,7 +209,7 @@ export class DiscoveryService {
     this.launch(scope, run, new AbortController(), false);
     return run;
   }
-  async resume(scope: string, runId: string, summarize = false) {
+  async resume(scope: string, runId: string, summarize = false, budget = 40) {
     const project = this.projects.shared(scope);
     if (this.active.has(project.id)) throw new Error("此项目已有理解任务");
     const run = this.memory.run(scope, runId);
@@ -206,13 +217,13 @@ export class DiscoveryService {
       throw new Error("此轮理解已有草稿，请新建一轮探索");
     if (summarize && !run.captureIds.length)
       throw new Error("请先完成至少一次页面观察");
-    if (!summarize && run.captureIds.length >= (run.roundStart ?? 0) + 120)
-      throw new Error("已达 120 个页面状态，请整理理解或新建任务");
-    if (!summarize)
-      run.budget = Math.min(
-        (run.roundStart ?? 0) + 120,
-        Math.max(run.budget, run.captureIds.length + 5),
-      );
+    if (!summarize) {
+      if (!Number.isInteger(budget) || budget < 2 || budget > 120)
+        throw new Error("本轮新增步数须为 2–120");
+      run.roundStart = run.captureIds.length;
+      run.budget = run.captureIds.length + budget;
+      run.finishCorrections = 0;
+    }
     run.state = "running";
     run.message = summarize
       ? "正在整理已有依据"
@@ -284,7 +295,7 @@ export class DiscoveryService {
           const answer = json(
             await this.model(
               scope,
-              `PRODUCK_DISCOVERY_STEP\n你是产品经理，自动深度体验产品的模块及新建/编辑全流程。${untrusted}\n${depthInstructions}\n只返回 JSON：{"observation":"当前模块、行为和待验证事项","action":{"kind":"click","index":0,"effect":"read"}}。action 可用 click(index)、fill(index,value，普通表单)、select(index,value)、press(index,key:Enter/Escape/Tab/ArrowDown/ArrowUp/ArrowLeft/ArrowRight/Space)、scroll(direction:up/down)、drag(index,targetIndex,from?:{x,y},to?:{x,y})、back、finish(reason)。拖拽位置是元素矩形内0–1的归一化坐标，省略为中心；可同一画布内指定不同起终点。draggable/dragHint 表示拖动线索，box 为视口CSS像素矩形。发现资源拖入、排序或画布节点时主动体验；先根据元素或已提供截图识别源目标，视口外先滚动再观察，不猜不可见对象。拖拽后必须在下一次观察核对新增节点、顺序、位置及关联配置变化；仅事件派发不等于成功，无变化如实记录。拖拽可能自动保存，不能仅因没有保存按钮就标为read，不明后果标unknown。优先访问未覆盖的模块、详情、筛选和弹窗，不重复无意义点击。用户已授权当前站点的自主浏览器交互，不要因控件名称陌生或需要展开侧栏而要求手动操作。每个操作标注 effect 为 read（浏览或修改未提交表单）、write（修改业务数据）或 unknown（无法判断实际后果）；业务写入由宿主请求单次确认，确认后仍由你执行。字段 value/required/valid/validationMessage 是本次观察结果；原生校验不通过时宿主不会派发提交事件，可填写后再提交。同一业务表单已尝试或拒绝后，不得换按钮或回车重复提交。登录与验证码交给用户。普通操作失败或用户拒绝时，重新观察并换其他入口，不重复失败动作；不要将一次拒绝视为整个任务失败。若已覆盖目标或无可执行动作，finish 并说明未覆盖项。索引只来自本次页面。\n续探说明：${run.continuedFrom ? "本轮继承已有依据。优先补齐覆盖清单缺失项及尚未访问的模块，重新判断历史阻碍；不得重放已尝试或已拒绝的业务提交。已完整体验的流程无需从头重复。" : "首次探索"}\n目标：${run.goal || "深入理解各业务模块，常规体验包含新建与编辑"}\n当前采集ID：${capture.id}\n体验清单：${JSON.stringify((run.coverage ?? []).map((c) => ({ module: c.module, flow: c.flow, checks: c.checks, evidenceIds: c.evidenceIds.slice(-3), limitation: c.limitation.slice(0, 200) })))}\n历史：${JSON.stringify(run.steps.slice(-12).map((s) => ({ captureId: s.captureId, module: s.module, flow: s.flow, observation: s.observation, action: s.action, result: s.result })))}\n交接资料概要：${JSON.stringify(run.sources.map((s) => ({ name: s.name, text: s.text.slice(0, 500), truncated: s.truncated })))}\n页面证据：${JSON.stringify({ title: page.title, url: safeUrl(page.url), text: page.text, elements: page.elements, blocked: page.blocked })}`,
+              `PRODUCK_DISCOVERY_STEP\n你是产品经理，自动深度体验产品的模块及新建/编辑全流程。${untrusted}\n${depthInstructions}\n${moduleInstructions}\n模块进度：${JSON.stringify((run.modules ?? []).map((m) => ({ name: m.name, state: m.state, summary: m.markdown.slice(0, 400), error: m.error })))}\n只返回 JSON：{"observation":"当前模块、行为和待验证事项","action":{"kind":"click","index":0,"effect":"read"}}。action 可用 click(index)、fill(index,value，普通表单)、select(index,value)、press(index,key:Enter/Escape/Tab/ArrowDown/ArrowUp/ArrowLeft/ArrowRight/Space)、scroll(direction:up/down)、drag(index,targetIndex,from?:{x,y},to?:{x,y})、back、complete-module(reason)、finish(reason)。拖拽位置是元素矩形内0–1的归一化坐标，省略为中心；可同一画布内指定不同起终点。draggable/dragHint 表示拖动线索，box 为视口CSS像素矩形。发现资源拖入、排序或画布节点时主动体验；先根据元素或已提供截图识别源目标，视口外先滚动再观察，不猜不可见对象。拖拽后必须在下一次观察核对新增节点、顺序、位置及关联配置变化；仅事件派发不等于成功，无变化如实记录。拖拽可能自动保存，不能仅因没有保存按钮就标为read，不明后果标unknown。优先访问未覆盖的模块、详情、筛选和弹窗，不重复无意义点击。用户已授权当前站点的自主浏览器交互，不要因控件名称陌生或需要展开侧栏而要求手动操作。每个操作标注 effect 为 read（浏览或修改未提交表单）、write（修改业务数据）或 unknown（无法判断实际后果）；业务写入由宿主请求单次确认，确认后仍由你执行。字段 value/required/valid/validationMessage 是本次观察结果；原生校验不通过时宿主不会派发提交事件，可填写后再提交。同一业务表单已尝试或拒绝后，不得换按钮或回车重复提交。登录与验证码交给用户。普通操作失败或用户拒绝时，重新观察并换其他入口，不重复失败动作；不要将一次拒绝视为整个任务失败。若已覆盖目标或无可执行动作，finish 并说明未覆盖项。索引只来自本次页面。\n续探说明：${run.continuedFrom || (run.roundStart ?? 0) > 0 ? "本轮继承已有依据。优先补齐覆盖清单缺失项及尚未访问的模块，重新判断历史阻碍；不得重放已尝试或已拒绝的业务提交。已完整体验的流程无需从头重复。" : "首次探索"}\n目标：${run.goal || "深入理解各业务模块，常规体验包含新建与编辑"}\n当前采集ID：${capture.id}\n体验清单：${JSON.stringify((run.coverage ?? []).map((c) => ({ module: c.module, flow: c.flow, checks: c.checks, evidenceIds: c.evidenceIds.slice(-3), limitation: c.limitation.slice(0, 200) })))}\n历史：${JSON.stringify(run.steps.slice(-12).map((s) => ({ captureId: s.captureId, module: s.module, flow: s.flow, observation: s.observation, action: s.action, result: s.result })))}\n交接资料概要：${JSON.stringify(run.sources.map((s) => ({ name: s.name, text: s.text.slice(0, 500), truncated: s.truncated })))}\n页面证据：${JSON.stringify({ title: page.title, url: safeUrl(page.url), text: page.text, elements: page.elements, blocked: page.blocked })}`,
               signal,
               page.elements.some(
                 (e) => ["CANVAS", "svg"].includes(e.tag) || e.dragHint,
@@ -306,7 +317,16 @@ export class DiscoveryService {
           step.flow = ["create", "edit"].includes(answer.flow)
             ? answer.flow
             : "browse";
+          modulePlan(run, answer.modulePlan);
+          const previousModule = run.activeModule;
           ensureModule(run, step.module!);
+          const currentModule = ensureDiscoveryModule(run, step.module!);
+          currentModule.state = "exploring";
+          run.activeModule = step.module;
+          if (previousModule && previousModule !== step.module) {
+            await this.summarizeModule(scope, run, previousModule, signal);
+            save();
+          }
           let coverageWarnings: string[];
           try {
             coverageWarnings = updateCoverage(run, answer.coverage);
@@ -323,15 +343,27 @@ export class DiscoveryService {
             step.result += `；未执行请求：${page.blocked.join("；").slice(0, 1500)}`;
           save();
           signal.throwIfAborted();
+          if (step.action.kind === "complete-module") {
+            if (
+              typeof step.action.reason !== "string" ||
+              step.action.reason.length > 1000
+            )
+              throw new Error("模块结束说明无效");
+            step.result += `；模块阶段结束：${step.action.reason}`;
+            save();
+            await this.summarizeModule(scope, run, step.module!, signal);
+            continue;
+          }
           if (step.action.kind === "finish") {
             if (
-              needsMoreExploration(run) &&
+              (needsMoreExploration(run) ||
+                run.modules?.some((m) => m.state === "pending")) &&
               (run.finishCorrections ?? 0) < 2 &&
               run.captureIds.length < run.budget
             ) {
               run.finishCorrections = (run.finishCorrections ?? 0) + 1;
               step.result +=
-                "；结束检查未通过：新建/编辑尚有未体验项且未说明阻碍，请继续体验或据实说明未覆盖原因";
+                "；结束检查未通过：模块计划或新建/编辑尚有未体验项且未说明阻碍，请继续体验或据实说明未覆盖原因";
               save();
               continue;
             }
@@ -425,7 +457,14 @@ export class DiscoveryService {
         }
       }
       signal.throwIfAborted();
-      run.message = "正在结合页面和交接资料整理模块理解";
+      for (const name of new Set(
+        run.steps.flatMap((s) => (s.module ? [s.module] : [])),
+      ))
+        ensureDiscoveryModule(run, name);
+      for (const module of [...(run.modules ?? [])]) {
+        await this.summarizeModule(scope, run, module.name, signal);
+      }
+      run.message = "正在汇总已自动整理的模块理解";
       save();
       const workspace = this.projects.shared(scope).workspace;
       const evidence = run.captureIds.slice(-120).map((id) => {
@@ -449,7 +488,7 @@ export class DiscoveryService {
       const response = json(
         await this.model(
           scope,
-          `PRODUCK_DISCOVERY_REPORT\n请整合证据生成中文产品理解。${untrusted}\n输出 JSON：{"overview":"产品定位、用户与目标","modules":[{"name":"模块名","understanding":"职责、页面组成、字段与业务规则；区分观察和推断","flows":["触发→操作→观察结果；注明仅资料描述的流程"],"evidenceIds":["页面或资料 ID"],"unknowns":["未覆盖或待验证"]}],"conflicts":["资料与页面或旧记忆冲突"],"limitations":["范围、被阻止请求、预算与截断"]}。最多12个模块，每个模块必须引用给出的真实证据 ID。体验记录仅提供最近40步，较早的新建/编辑覆盖清单由宿主追加，不得将近期记录未包含的流程断言为未执行。拖拽效果须引用动作前后页面，核对新增节点、顺序、位置和联动；只有事件派发或缺少后续观察时标为待验证，不宣称成功。禁止编造访问记录。正文总计不超过12000字。\n目标：${run.goal}\n页面证据（每页摘录400字）：${JSON.stringify(evidence)}\n体验记录：${JSON.stringify(run.steps.slice(-40).map((s) => ({ captureId: s.captureId, action: s.action, executed: s.executed, module: s.module, flow: s.flow, observation: s.observation.slice(0, Math.min(250, Math.floor(6000 / Math.min(40, run.steps.length)))), result: s.result.slice(0, Math.min(200, Math.floor(6000 / Math.min(40, run.steps.length)))) })))}\n交接资料：${JSON.stringify(run.sources)}\n上轮报告（可能未经审核，仅供补齐与比对）：${previousDraft}\n原已审核理解（供比较，非当前观察）：${previous?.markdown.slice(0, 2000) || "无"}`,
+          `PRODUCK_DISCOVERY_REPORT\n请整合证据生成中文产品理解。${untrusted}\n输出 JSON：{"overview":"产品定位、用户与目标","modules":[{"name":"模块名","understanding":"职责、页面组成、字段与业务规则；区分观察和推断","flows":["触发→操作→观察结果；注明仅资料描述的流程"],"evidenceIds":["页面或资料 ID"],"unknowns":["未覆盖或待验证"]}],"conflicts":["资料与页面或旧记忆冲突"],"limitations":["范围、被阻止请求、预算与截断"]}。最多12个模块，每个模块必须引用给出的真实证据 ID。体验记录仅提供最近40步，较早的新建/编辑覆盖清单由宿主追加，不得将近期记录未包含的流程断言为未执行。拖拽效果须引用动作前后页面，核对新增节点、顺序、位置和联动；只有事件派发或缺少后续观察时标为待验证，不宣称成功。禁止编造访问记录。正文总计不超过12000字。\n模块阶段整理（未经审核，优先综合这些分模块成果；待探索模块不得宣称已体验）：${JSON.stringify((run.modules ?? []).map((m) => ({ name: m.name, state: m.state, markdown: m.markdown.slice(0, 800), evidenceIds: m.evidenceIds, error: m.error })))}\n目标：${run.goal}\n页面证据（每页摘录400字）：${JSON.stringify(evidence)}\n体验记录：${JSON.stringify(run.steps.slice(-40).map((s) => ({ captureId: s.captureId, action: s.action, executed: s.executed, module: s.module, flow: s.flow, observation: s.observation.slice(0, Math.min(250, Math.floor(6000 / Math.min(40, run.steps.length)))), result: s.result.slice(0, Math.min(200, Math.floor(6000 / Math.min(40, run.steps.length)))) })))}\n交接资料：${JSON.stringify(run.sources)}\n上轮报告（可能未经审核，仅供补齐与比对）：${previousDraft}\n原已审核理解（供比较，非当前观察）：${previous?.markdown.slice(0, 2000) || "无"}`,
           signal,
         ),
       );
@@ -463,6 +502,7 @@ export class DiscoveryService {
         : "模块理解草稿已生成，请审核后保存为长期记忆";
       save();
     } catch (e) {
+      preserveModuleProgress(run);
       run.state = "paused";
       run.message = signal.aborted
         ? "已暂停，采集依据已保留，可继续自动体验"
@@ -479,6 +519,21 @@ export class DiscoveryService {
         save();
       }
     }
+  }
+  private async summarizeModule(
+    scope: string,
+    run: DiscoveryRun,
+    name: string,
+    signal: AbortSignal,
+  ) {
+    await summarizeModule(
+      run,
+      name,
+      signal,
+      (prompt) => this.model(scope, prompt, signal),
+      () => this.memory.saveRun(scope, run),
+      (id) => getCapture(this.projects.shared(scope).workspace, id),
+    );
   }
   async cancel(scope: string) {
     const entry = this.active.get(this.projects.shared(scope).id);
@@ -530,7 +585,7 @@ export function renderUnderstanding(value: any, run: DiscoveryRun) {
         .join("\n") || "- 无补充；未实际体验的规则仍需验证。"
     }`;
   });
-  return `# 产品理解\n\n采集任务：${run.id}\n生成依据截至：${new Date().toISOString()}\n范围：${run.url}\n\n## 产品概览\n\n${value.overview}\n\n${modules.join("\n\n")}\n\n${coverageMarkdown(run)}\n\n## 冲突与差异\n${
+  return `# 产品理解\n\n采集任务：${run.id}\n生成依据截至：${new Date().toISOString()}\n范围：${run.url}\n\n## 产品概览\n\n${value.overview}\n\n${modules.join("\n\n")}\n\n${moduleMarkdown(run)}\n\n${coverageMarkdown(run)}\n\n## 冲突与差异\n${
     strings(value.conflicts)
       .map((x) => "- " + x)
       .join("\n") || "- 未报告冲突，不代表所有材料一致。"

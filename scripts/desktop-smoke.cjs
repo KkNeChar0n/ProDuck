@@ -17,6 +17,7 @@ let server,
   platformCredentialRef,
   yunxiaoCredentialRef,
   discoveryCalls = 0,
+  interruptDiscoveryOnce = true,
   browserConfirmations = 0,
   plannerCalls = 0,
   builtinCalls = 0,
@@ -360,7 +361,24 @@ const wait = async (w, expression, timeoutMs = 10000) => {
           assert(data.messages[0].content.includes("理解版本："));
           content = "已使用审核记忆回答";
         }
-        if (data.messages[0].content.startsWith("PRODUCK_DISCOVERY_STEP")) {
+        if (data.messages[0].content.startsWith("PRODUCK_DISCOVERY_MODULE")) {
+          const payload = JSON.parse(
+            data.messages[0].content.split("模块资料：")[1],
+          );
+          content = JSON.stringify({
+            understanding: "客户模块已自动整理，包含列表和新增流程",
+            flows: ["客户列表→新增→校验与保存"],
+            unknowns: ["编辑流程尚未完整覆盖"],
+            evidenceIds: [payload.evidence[0].id],
+          });
+        } else if (
+          data.messages[0].content.startsWith("PRODUCK_DISCOVERY_STEP")
+        ) {
+          if (discoveryCalls === 2 && interruptDiscoveryOnce) {
+            interruptDiscoveryOnce = false;
+            res.end("data: [DONE]\n\n");
+            return;
+          }
           assert(data.messages[0].content.includes("客户筛选规则"));
           discoveryCalls++;
           const page = JSON.parse(
@@ -1411,11 +1429,60 @@ const wait = async (w, expression, timeoutMs = 10000) => {
   );
   await wait(
     window,
+    `(async()=>{const s=await window.produck.discovery.state(${JSON.stringify(firstRelease.id)});return s.run?.state==='paused'})()`,
+    60000,
+  );
+  await wait(
+    window,
+    `Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='继续探索' && !b.disabled)`,
+  );
+  assert.equal(
+    await wc.executeJavaScript(
+      `document.body.innerText.includes('授权并继续自动体验')`,
+    ),
+    false,
+  );
+  const pausedDiscovery = await wc.executeJavaScript(
+    `window.produck.discovery.state(${JSON.stringify(firstRelease.id)})`,
+  );
+  assert.equal(pausedDiscovery.reports.length, 0);
+  assert(pausedDiscovery.run.modules.some((m) => m.markdown));
+  await wc.executeJavaScript(
+    `{const e=document.querySelector('[aria-label="探索步数"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,'60');e.dispatchEvent(new Event('input',{bubbles:true}));}`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='继续探索').click()`,
+  );
+  await wait(
+    window,
     `!!document.querySelector('[aria-label="模块理解 Markdown"]')`,
     60000,
   );
   const draftUnderstanding = await wc.executeJavaScript(
     `window.produck.discovery.state(${JSON.stringify(firstRelease.id)})`,
+  );
+  assert.equal(
+    draftUnderstanding.run.budget - pausedDiscovery.run.captureIds.length,
+    60,
+  );
+  assert.equal(
+    draftUnderstanding.run.roundStart,
+    pausedDiscovery.run.captureIds.length,
+  );
+  assert(
+    draftUnderstanding.run.modules.some((m) =>
+      m.markdown.includes("客户模块已自动整理"),
+    ),
+  );
+  await wc.executeJavaScript(
+    `{const section=document.querySelector('[aria-label="模块探索进度"]');section.querySelector('details').open=true;section.scrollIntoView({block:'start'});}`,
+  );
+  await wc.executeJavaScript(
+    `new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`,
+  );
+  writeFileSync(
+    "docs/verification/desktop-discovery-modules.png",
+    (await wc.capturePage()).toPNG(),
   );
   assert.equal(draftUnderstanding.activeReportId, null);
   assert.equal(browserConfirmations, 1);

@@ -95,6 +95,15 @@ try {
   service = new DiscoveryService(projects, browser, async (scope, prompt) => {
     assert.equal(scope, release.id);
     assert(prompt.includes("客户拥有多个订单"));
+    if (prompt.startsWith("PRODUCK_DISCOVERY_MODULE")) {
+      const payload = JSON.parse(prompt.split("模块资料：")[1]);
+      return JSON.stringify({
+        understanding: "当前模块的页面与交接资料理解",
+        flows: [],
+        unknowns: ["未完整覆盖"],
+        evidenceIds: [payload.evidence[0].id],
+      });
+    }
     if (prompt.startsWith("PRODUCK_DISCOVERY_STEP")) {
       call++;
       const evidence = JSON.parse(prompt.split("页面证据：")[1]);

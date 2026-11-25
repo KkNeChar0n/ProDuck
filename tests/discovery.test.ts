@@ -22,6 +22,16 @@ import type {
   DiscoveryRun,
   DiscoveryPage,
 } from "../src/contracts/discovery.js";
+
+function moduleReply(prompt: string) {
+  const payload = JSON.parse(prompt.split("模块资料：")[1]);
+  return JSON.stringify({
+    understanding: "模块职责与页面规则来自已观察资料",
+    flows: ["查看入口→体验流程→核对结果"],
+    unknowns: ["尚有未覆盖分支"],
+    evidenceIds: [payload.evidence[0].id],
+  });
+}
 const page: DiscoveryPage = {
   title: "客户管理",
   url: "https://example.com/",
@@ -257,6 +267,8 @@ test("automatic discovery combines handoff evidence, preserves cancellation and 
   };
   let service: DiscoveryService;
   service = new DiscoveryService(projects, browser, async (_scope, prompt) => {
+    if (prompt.startsWith("PRODUCK_DISCOVERY_MODULE"))
+      return moduleReply(prompt);
     assert(prompt.includes("证书自动化"));
     if (prompt.startsWith("PRODUCK_DISCOVERY_STEP")) {
       stepCalls++;
@@ -354,6 +366,8 @@ test("ordinary action failures re-observe and continue without manual interventi
   };
   let service: DiscoveryService;
   service = new DiscoveryService(projects, browser, async (_id, prompt) => {
+    if (prompt.startsWith("PRODUCK_DISCOVERY_MODULE"))
+      return moduleReply(prompt);
     if (prompt.startsWith("PRODUCK_DISCOVERY_REPORT"))
       return JSON.stringify(output(service.state(p.id).run!));
     decisions++;
@@ -392,6 +406,8 @@ test("business actions are not replayed after a paused task resumes", async () =
   };
   let service: DiscoveryService;
   service = new DiscoveryService(projects, browser, async (_id, prompt) => {
+    if (prompt.startsWith("PRODUCK_DISCOVERY_MODULE"))
+      return moduleReply(prompt);
     if (prompt.startsWith("PRODUCK_DISCOVERY_REPORT"))
       return JSON.stringify(output(service.state(p.id).run!));
     decisions++;
@@ -416,7 +432,12 @@ test("business actions are not replayed after a paused task resumes", async () =
   await settle();
   assert.equal(service.state(p.id).run?.state, "paused");
   assert.equal(actions, 1);
-  await service.resume(p.id, run.id);
+  const beforeCount = service.state(p.id).run!.captureIds.length;
+  assert.equal(service.state(p.id).reports.length, 0);
+  const resumed = await service.continueExploration(p.id, run.id, 60);
+  assert.equal(resumed.roundStart, beforeCount);
+  assert.equal(resumed.budget, beforeCount + 60);
+
   await settle();
   assert.equal(service.state(p.id).run?.state, "draft");
   assert.equal(actions, 1);
@@ -523,6 +544,8 @@ test("no-dispatch validation permits later submission; persisted intent blocks a
   };
   let service: DiscoveryService;
   service = new DiscoveryService(projects, browser, async (_id, prompt) => {
+    if (prompt.startsWith("PRODUCK_DISCOVERY_MODULE"))
+      return moduleReply(prompt);
     if (prompt.startsWith("PRODUCK_DISCOVERY_REPORT"))
       return JSON.stringify(output(service.state(p.id).run!));
     decisions++;
@@ -576,6 +599,8 @@ test("continue exploration preserves approved evidence, inherits coverage and ca
   };
   let service: DiscoveryService;
   service = new DiscoveryService(projects, browser, async (_id, prompt) => {
+    if (prompt.startsWith("PRODUCK_DISCOVERY_MODULE"))
+      return moduleReply(prompt);
     if (prompt.startsWith("PRODUCK_DISCOVERY_REPORT"))
       return JSON.stringify(output(service.state(p.id).run!));
     return JSON.stringify({
@@ -695,6 +720,8 @@ test("drag exploration passes screenshot evidence and preserves before/after obs
     projects,
     browser,
     async (_id, prompt, _signal, image) => {
+      if (prompt.startsWith("PRODUCK_DISCOVERY_MODULE"))
+        return moduleReply(prompt);
       if (prompt.startsWith("PRODUCK_DISCOVERY_REPORT")) {
         assert(prompt.includes('"kind":"drag"'));
         assert(prompt.includes("节点新增"));
@@ -724,6 +751,61 @@ test("drag exploration passes screenshot evidence and preserves before/after obs
   assert.equal(run.steps[0].submitted, false);
   assert(run.steps[0].businessActionKey);
   assert.equal(run.steps[1].observation, "观察到新增节点及属性配置");
+  await service.close();
+  db.close();
+});
+
+test("module completion summarizes before the next module acts, then budget end summarizes the last module", async () => {
+  const { db, projects, p } = fixture();
+  const order: string[] = [];
+  let decisions = 0;
+  const browser = {
+    open: async () => {},
+    begin: async () => page.url,
+    observe: async () => ({ ...page, png: new Uint8Array([1]) }),
+    action: async () => {
+      order.push("action-orders");
+    },
+    manual: async () => {},
+    close: () => {},
+  };
+  let service: DiscoveryService;
+  service = new DiscoveryService(projects, browser, async (_id, prompt) => {
+    if (prompt.startsWith("PRODUCK_DISCOVERY_MODULE")) {
+      const data = JSON.parse(prompt.split("模块资料：")[1]);
+      order.push("summary-" + data.name);
+      return moduleReply(prompt);
+    }
+    if (prompt.startsWith("PRODUCK_DISCOVERY_REPORT")) {
+      assert(prompt.includes("模块阶段整理"));
+      return JSON.stringify(output(service.state(p.id).run!));
+    }
+    decisions++;
+    if (decisions === 1)
+      return JSON.stringify({
+        module: "客户",
+        modulePlan: ["客户", "订单", "报表"],
+        observation: "客户已观察",
+        action: { kind: "complete-module", reason: "权限分支待补充" },
+      });
+    return JSON.stringify({
+      module: "订单",
+      observation: "订单已观察",
+      action: { kind: "click", index: 0, effect: "read" },
+    });
+  });
+  await service.start(p.id, "逐模块体验", 3);
+  for (let i = 0; i < 100 && service.state(p.id).run?.state === "running"; i++)
+    await new Promise((r) => setTimeout(r, 10));
+  const state = service.state(p.id);
+  assert.equal(state.run?.state, "draft");
+  assert.deepEqual(order, ["summary-客户", "action-orders", "summary-订单"]);
+  assert.equal(
+    state.run!.modules!.find((m) => m.name === "报表")!.state,
+    "pending",
+  );
+  assert(state.reports[0].markdown.includes("自动整理的模块记录"));
+  assert.equal(state.activeReportId, null);
   await service.close();
   db.close();
 });

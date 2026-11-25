@@ -81,7 +81,7 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
       </p>
       <p>
         每个项目保留独立登录状态。可先在「交接资料」导入已有文档，Agent
-        会结合页面与资料整理理解。默认深入体验各模块的新建和编辑，包括字段、校验、取消与保存结果。
+        会先识别模块，逐个深入体验；每个模块结束后自动整理，再继续下一个模块。默认包含新建和编辑，以及字段、校验、取消与保存结果。
       </p>
       <form
         className="url-form"
@@ -158,13 +158,13 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
         步。
         一步是观察一次页面状态并决定下一步操作；弹窗和筛选结果也可能各占一步，不等于模块数量。
         步数越多通常耗时和模型用量越高，Agent
-        也可能提前结束；达到上限后会整理已有依据，不代表已完整理解产品。可点击「继续探索」增加一轮预算；「重新探索」则从头建立新清单。
+        也可能提前结束。模块完成或切换时会自动整理；达到上限或暂停时保留阶段成果，不代表已完整理解产品。「继续探索」使用上方步数追加新一轮预算，无需先手动整理；「重新探索」从头建立新清单。
       </p>
       <p className="muted">
         授权后，Agent
         将自行点击、输入、展开菜单并体验当前站点，普通操作失败会重新观察或换路。涉及业务数据修改时会单次确认，确认后仍由
         Agent
-        执行。页面文字、元素和交接资料将发送给项目模型，截图留在本地。Chrome
+        执行。页面文字、元素和交接资料将发送给项目模型；图像能力已检测通过时，拖拽和画布页面会附加截图。Chrome
         中手动登录即可，无需配置调试端口。
       </p>
       {notice && <p role="status">{notice}</p>}
@@ -194,7 +194,7 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
             {state.run.budget - (state.run.roundStart ?? 0)} 个页面状态 · 累计{" "}
             {state.run.captureIds.length} 个
           </p>
-          {state.run.state === "draft" && (
+          {["draft", "paused"].includes(state.run.state) && (
             <div>
               <button
                 className="primary"
@@ -226,16 +226,6 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
           {state.run.state === "paused" && (
             <div className="discovery-actions">
               <button
-                disabled={busy}
-                onClick={() =>
-                  void act(() =>
-                    desktop().discovery.resume(projectId, state.run!.id),
-                  )
-                }
-              >
-                授权并继续自动体验
-              </button>
-              <button
                 disabled={busy || !state.run.captureIds.length}
                 onClick={() =>
                   void act(() =>
@@ -243,9 +233,44 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
                   )
                 }
               >
-                先整理已有依据
+                仅整理并结束本轮
               </button>
             </div>
+          )}
+          {!!state.run.modules?.length && (
+            <section aria-label="模块探索进度">
+              <h3>模块探索与自动整理</h3>
+              <p className="muted">
+                每个模块结束后自动保存理解；有未覆盖项时保留阶段成果。以下内容尚未成为永久记忆。
+              </p>
+              {state.run.modules.map((module) => (
+                <details key={module.name}>
+                  <summary>
+                    {module.name} ·{" "}
+                    {
+                      {
+                        pending: "待探索",
+                        exploring: "体验中",
+                        summarizing: "正在自动整理",
+                        summarized: "已整理",
+                        partial: "阶段整理 · 有待验证项",
+                        failed: "整理失败 · 观察已保留",
+                      }[module.state]
+                    }
+                  </summary>
+                  {module.error && <p className="muted">{module.error}</p>}
+                  {module.markdown ? (
+                    <pre className="document-text">{module.markdown}</pre>
+                  ) : (
+                    <p className="muted">
+                      {module.state === "pending"
+                        ? "尚未访问，不计入已体验范围。"
+                        : "正在收集当前模块的页面与流程依据。"}
+                    </p>
+                  )}
+                </details>
+              ))}
+            </section>
           )}
           {!!state.run.coverage?.length && (
             <details open>

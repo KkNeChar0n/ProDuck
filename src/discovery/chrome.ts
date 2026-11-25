@@ -278,7 +278,7 @@ export class ChromeDiscoveryBrowser implements DiscoveryBrowser {
     const s = this.current(id);
     if (!s.origin) throw new Error("自动探索已暂停");
     validateDiscoveryAction(page, action, s.origin);
-    if (action.kind === "finish") return;
+    if (action.kind === "finish" || action.kind === "complete-module") return;
     const confirmation = actionConfirmation(page, action);
     const element =
       "index" in action

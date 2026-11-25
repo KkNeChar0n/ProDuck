@@ -63,6 +63,7 @@ export type DiscoveryAction = (
         | "ArrowRight"
         | "Space";
     }
+  | { kind: "complete-module"; reason: string }
   | { kind: "back" }
   | { kind: "finish"; reason: string }
 ) & { effect?: "read" | "write" | "unknown" };
@@ -76,7 +77,24 @@ export interface DiscoveryCoverage {
   detail: string;
   limitation: string;
 }
+export interface DiscoveryModule {
+  name: string;
+  state:
+    | "pending"
+    | "exploring"
+    | "summarizing"
+    | "summarized"
+    | "partial"
+    | "failed";
+  markdown: string;
+  evidenceIds: string[];
+  signature?: string;
+  updatedAt?: string;
+  error?: string;
+}
 export interface DiscoveryRun {
+  modules?: DiscoveryModule[];
+  activeModule?: string;
   id: string;
   projectId: string;
   releaseId: string;
