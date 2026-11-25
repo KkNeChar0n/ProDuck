@@ -85,6 +85,13 @@ export function registerWorkbenchIpc(
       return discovery.start(id, goal, budget);
     },
   );
+  ipcMain.handle(
+    "discovery:continue",
+    (e, id: string, runId: string, budget: number) => {
+      trusted(e, id);
+      return discovery.continueExploration(id, runId, budget);
+    },
+  );
   ipcMain.handle("discovery:resume", (e, id: string, runId: string) => {
     trusted(e, id);
     return discovery.resume(id, runId);

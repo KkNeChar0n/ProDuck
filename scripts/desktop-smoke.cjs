@@ -1402,6 +1402,52 @@ const wait = async (w, expression, timeoutMs = 10000) => {
   );
   assert.equal(isolatedUnderstanding.activeReportId, activeUnderstanding.id);
   await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('[role=tab]')).find(b=>b.textContent==='理解产品').click()`,
+  );
+  await wait(
+    window,
+    `Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='继续探索' && !b.disabled)`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='继续探索').click()`,
+  );
+  await wait(
+    window,
+    `(async()=>{const s=await window.produck.discovery.state(${JSON.stringify(firstRelease.id)});return s.run.id!==${JSON.stringify(reviewedUnderstanding.run.id)} && s.run.state==='draft'})()`,
+    60000,
+  );
+  const continuedUnderstanding = await wc.executeJavaScript(
+    `window.produck.discovery.state(${JSON.stringify(firstRelease.id)})`,
+  );
+  assert.equal(
+    continuedUnderstanding.run.continuedFrom,
+    reviewedUnderstanding.run.id,
+  );
+  assert.equal(
+    continuedUnderstanding.run.roundStart,
+    reviewedUnderstanding.run.captureIds.length,
+  );
+  assert(
+    continuedUnderstanding.run.captureIds.length >
+      reviewedUnderstanding.run.captureIds.length,
+  );
+  assert.equal(continuedUnderstanding.activeReportId, activeUnderstanding.id);
+  assert(
+    continuedUnderstanding.reports.some(
+      (r) => r.id === activeUnderstanding.id && r.approvedAt,
+    ),
+  );
+  await wait(
+    window,
+    `document.body.innerText.includes('累计') && Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='继续探索' && !b.disabled)`,
+    60000,
+  );
+  writeFileSync(
+    "docs/verification/desktop-discovery-continue.png",
+    (await wc.capturePage()).toPNG(),
+  );
+
+  await wc.executeJavaScript(
     `Array.from(document.querySelectorAll('.nav')).find(b=>b.textContent.includes('项目记忆')).click()`,
   );
   await wait(window, `document.body.innerText.includes('人工核对')`);

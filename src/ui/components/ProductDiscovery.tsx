@@ -140,7 +140,7 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
             })
           }
         >
-          授权并开始自动体验
+          {state.run ? "重新探索" : "授权并开始自动体验"}
         </button>
         {running && (
           <button
@@ -158,7 +158,7 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
         步。
         一步是观察一次页面状态并决定下一步操作；弹窗和筛选结果也可能各占一步，不等于模块数量。
         步数越多通常耗时和模型用量越高，Agent
-        也可能提前结束；达到上限后会整理已有依据，不代表已完整理解产品。
+        也可能提前结束；达到上限后会整理已有依据，不代表已完整理解产品。可点击「继续探索」增加一轮预算；「重新探索」则从头建立新清单。
       </p>
       <p className="muted">
         授权后，Agent
@@ -189,9 +189,40 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
             </button>
           )}
           <p>
-            已观察 {state.run.captureIds.length} 个页面状态 · 本轮预算{" "}
-            {state.run.budget} 步
+            本轮已观察{" "}
+            {state.run.captureIds.length - (state.run.roundStart ?? 0)} /{" "}
+            {state.run.budget - (state.run.roundStart ?? 0)} 个页面状态 · 累计{" "}
+            {state.run.captureIds.length} 个
           </p>
+          {state.run.state === "draft" && (
+            <div>
+              <button
+                className="primary"
+                disabled={busy || running || dirty}
+                onClick={() =>
+                  void act(async () => {
+                    await desktop().discovery.continueExploration(
+                      projectId,
+                      state.run!.id,
+                      budget,
+                    );
+                    setNotice(
+                      `继续探索已启动，本轮新增 ${budget} 步预算；旧报告保留，新结果仍需审核。`,
+                    );
+                  })
+                }
+              >
+                继续探索
+              </button>
+              <p className="muted">
+                沿用已有依据与覆盖清单，优先补齐未完成项；新增步数使用上方设置（当前{" "}
+                {budget} 步）。Chrome 关闭后请先重新打开。
+                {dirty
+                  ? "请先保存当前草稿修改。"
+                  : "旧报告和已审核记忆不会被覆盖。"}
+              </p>
+            </div>
+          )}
           {state.run.state === "paused" && (
             <div className="discovery-actions">
               <button

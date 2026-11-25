@@ -560,3 +560,88 @@ test("no-dispatch validation permits later submission; persisted intent blocks a
   await service.close();
   db.close();
 });
+
+test("continue exploration preserves approved evidence, inherits coverage and cannot replay business writes", async () => {
+  const { db, projects, p, other } = fixture();
+  let actions = 0;
+  const browser = {
+    open: async () => {},
+    begin: async () => page.url,
+    observe: async () => ({ ...page, png: new Uint8Array([1]) }),
+    action: async () => {
+      actions++;
+    },
+    manual: async () => {},
+    close: () => {},
+  };
+  let service: DiscoveryService;
+  service = new DiscoveryService(projects, browser, async (_id, prompt) => {
+    if (prompt.startsWith("PRODUCK_DISCOVERY_REPORT"))
+      return JSON.stringify(output(service.state(p.id).run!));
+    return JSON.stringify({
+      observation: "业务操作",
+      module: "客户",
+      flow: "edit",
+      action: { kind: "click", index: 1, effect: "write" },
+    });
+  });
+  const settle = async () => {
+    for (
+      let i = 0;
+      i < 200 && service.state(p.id).run?.state === "running";
+      i++
+    )
+      await new Promise((r) => setTimeout(r, 10));
+  };
+  const initial = await service.start(p.id, "理解", 2);
+  await settle();
+  const original = service.memory.run(p.id, initial.id);
+  const report = service.state(p.id).reports[0];
+  const revised = service.memory.revise(
+    p.id,
+    report.id,
+    report.digest,
+    report.markdown + "\n人工补充保留",
+  );
+  service.memory.approve(p.id, revised.id, revised.digest);
+  const originalBytes = JSON.stringify(original);
+  await assert.rejects(service.continueExploration(other.id, initial.id, 40));
+  await assert.rejects(service.continueExploration(p.id, initial.id, 121));
+  const next = await service.continueExploration(p.id, initial.id, 120);
+  assert.notEqual(next.id, initial.id);
+  assert.equal(next.continuedFrom, initial.id);
+  assert.equal(next.previousReportId, revised.id);
+  assert.equal(next.roundStart, 2);
+  assert.equal(next.budget, 122);
+  assert.deepEqual(next.captureIds.slice(0, 2), original.captureIds);
+  assert.deepEqual(next.coverage, original.coverage);
+  assert.equal(next.reportId, undefined);
+  await assert.rejects(
+    service.continueExploration(p.id, initial.id, 40),
+    /已有理解任务/,
+  );
+  await settle();
+  assert.equal(service.state(p.id).run?.state, "draft");
+  assert.equal(actions, 1);
+  assert.equal(
+    JSON.stringify(service.memory.run(p.id, initial.id)),
+    originalBytes,
+  );
+  assert.equal(service.memory.active(p.id)?.id, revised.id);
+  assert(
+    service.memory
+      .get(p.id, revised.id, revised.digest, true)
+      .markdown.includes("人工补充保留"),
+  );
+  assert(
+    service.state(p.id).run!.captureIds.length > original.captureIds.length,
+  );
+  const nextReport = service
+    .state(p.id)
+    .reports.find((r) => r.runId === next.id)!;
+  assert.equal(nextReport.approvedAt, undefined);
+  service.memory.approve(p.id, nextReport.id, nextReport.digest);
+  assert.equal(service.memory.active(p.id)?.id, nextReport.id);
+  await service.close();
+  db.close();
+});

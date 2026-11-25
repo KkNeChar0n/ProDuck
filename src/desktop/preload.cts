@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld(
       state: (id: string) => ipcRenderer.invoke("discovery:state", id),
       start: (id: string, goal: string, budget: number) =>
         ipcRenderer.invoke("discovery:start", id, goal, budget),
+      continueExploration: (id: string, runId: string, budget: number) =>
+        ipcRenderer.invoke("discovery:continue", id, runId, budget),
       resume: (id: string, runId: string) =>
         ipcRenderer.invoke("discovery:resume", id, runId),
       cancel: (id: string) => ipcRenderer.invoke("discovery:cancel", id),

@@ -72,6 +72,9 @@ export interface DiscoveryRun {
   url: string;
   goal: string;
   budget: number;
+  roundStart?: number;
+  continuedFrom?: string;
+  previousReportId?: string;
   state: "running" | "paused" | "draft";
   message: string;
   createdAt: string;
@@ -118,6 +121,11 @@ export interface DiscoveryBridge {
   state(id: string): Promise<DiscoveryState>;
   start(id: string, goal: string, budget: number): Promise<DiscoveryRun>;
   resume(id: string, runId: string): Promise<DiscoveryRun>;
+  continueExploration(
+    id: string,
+    runId: string,
+    budget: number,
+  ): Promise<DiscoveryRun>;
   cancel(id: string): Promise<void>;
   summarize(id: string, runId: string): Promise<DiscoveryRun>;
   revise(
