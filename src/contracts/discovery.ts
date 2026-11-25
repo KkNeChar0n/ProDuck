@@ -1,5 +1,9 @@
 export interface DiscoveryElement {
   index: number;
+  key?: string;
+  draggable?: boolean;
+  dragHint?: boolean;
+  box?: { x: number; y: number; width: number; height: number };
   tag: string;
   role: string;
   label: string;
@@ -37,6 +41,13 @@ export interface DiscoveryPage {
 }
 export type DiscoveryAction = (
   | { kind: "click"; index: number }
+  | {
+      kind: "drag";
+      index: number;
+      targetIndex: number;
+      from?: { x: number; y: number };
+      to?: { x: number; y: number };
+    }
   | { kind: "fill" | "select"; index: number; value: string }
   | { kind: "scroll"; direction: "up" | "down" }
   | {

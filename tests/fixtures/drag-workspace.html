@@ -1,0 +1,17 @@
+<!doctype html><html lang="zh"><meta charset="utf-8"><title>拖拽工作台</title>
+<style>body{font:16px sans-serif;margin:30px}main{display:flex;gap:30px}section{width:320px}#resource{padding:20px;background:#ecd9a9;cursor:grab}#drop{height:130px;border:2px dashed #687;padding:15px}#sort{display:flex;gap:12px;padding:12px;background:#eee}#sort div{padding:20px;cursor:grab;background:#bcd;touch-action:none}canvas{border:1px solid #777;touch-action:none}#result{padding:20px}#outside{margin-top:1800px;height:100px}</style>
+<h1>拖拽工作台</h1><main><section><div id="resource" draggable="true" aria-label="文本资源">文本资源</div><div id="drop" role="region" aria-label="资源画布">将资源拖入此处</div></section><section><div id="sort" role="list" aria-label="排序列表"><div id="a" role="listitem" aria-label="条目 A">A</div><div id="b" role="listitem" aria-label="条目 B">B</div></div></section><section><canvas id="canvas" width="300" height="200" aria-label="节点画布"></canvas></section></main><div id="result" aria-live="polite">等待操作</div><div id="outside" role="region" aria-label="远处区域">视口外目标</div>
+<script>
+const resource=document.querySelector('#resource'),drop=document.querySelector('#drop'),sort=document.querySelector('#sort'),canvas=document.querySelector('#canvas'),result=document.querySelector('#result');
+let drops=0,dragging=null,node={x:60,y:60},moving=false;const context=canvas.getContext('2d');
+function draw(){context.clearRect(0,0,300,200);context.fillStyle='#456';context.fillRect(node.x-20,node.y-20,40,40);}
+draw();
+resource.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain','text-resource');e.dataTransfer.effectAllowed='copy';});
+drop.addEventListener('dragover',e=>e.preventDefault());
+drop.addEventListener('drop',e=>{e.preventDefault();if(e.dataTransfer.getData('text/plain')==='text-resource'){drops++;drop.textContent='已添加文本节点 '+drops;result.textContent='资源联动：属性面板显示文本配置';}});
+for(const item of sort.children)item.addEventListener('pointerdown',e=>{dragging=item;item.setPointerCapture(e.pointerId);});
+document.addEventListener('pointerup',e=>{if(dragging){const other=[...sort.children].find(x=>x!==dragging);const r=other.getBoundingClientRect();if(e.clientX>=r.left&&e.clientX<=r.right){sort.insertBefore(other,dragging);result.textContent='排序结果：'+sort.innerText.replace(/\s/g,'');}dragging=null;}moving=false;});
+canvas.addEventListener('pointerdown',e=>{const r=canvas.getBoundingClientRect();if(Math.hypot(e.clientX-r.left-node.x,e.clientY-r.top-node.y)<35){moving=true;canvas.setPointerCapture(e.pointerId);}});
+canvas.addEventListener('pointermove',e=>{if(moving){const r=canvas.getBoundingClientRect();node={x:Math.round(e.clientX-r.left),y:Math.round(e.clientY-r.top)};draw();result.textContent='节点位置：'+node.x+','+node.y;}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){dragging=null;moving=false;}});
+</script></html>

@@ -645,3 +645,85 @@ test("continue exploration preserves approved evidence, inherits coverage and ca
   await service.close();
   db.close();
 });
+
+test("drag exploration passes screenshot evidence and preserves before/after observations without inventing success", async () => {
+  const { db, projects, p } = fixture();
+  let dragged = false;
+  const dragPage: DiscoveryPage = {
+    ...page,
+    elements: [
+      {
+        index: 0,
+        key: "#resource",
+        tag: "DIV",
+        role: "",
+        type: "",
+        label: "资源",
+        dragHint: true,
+      },
+      {
+        index: 1,
+        key: "#canvas",
+        tag: "CANVAS",
+        role: "",
+        type: "",
+        label: "画布",
+      },
+    ],
+  };
+  const browser = {
+    open: async () => {},
+    begin: async () => page.url,
+    observe: async () => ({
+      ...dragPage,
+      text: dragged ? "节点新增，属性面板显示配置" : "空画布",
+      png: new Uint8Array([1]),
+    }),
+    action: async (
+      _id: string,
+      _page: DiscoveryPage,
+      action: import("../src/contracts/discovery.js").DiscoveryAction,
+    ) => {
+      assert.equal(action.kind, "drag");
+      dragged = true;
+    },
+    manual: async () => {},
+    close: () => {},
+  };
+  let service: DiscoveryService;
+  service = new DiscoveryService(
+    projects,
+    browser,
+    async (_id, prompt, _signal, image) => {
+      if (prompt.startsWith("PRODUCK_DISCOVERY_REPORT")) {
+        assert(prompt.includes('"kind":"drag"'));
+        assert(prompt.includes("节点新增"));
+        return JSON.stringify(output(service.state(p.id).run!));
+      }
+      assert.match(prompt, /drag\(index,targetIndex/);
+      assert(image);
+      if (dragged) {
+        assert(prompt.includes("节点新增"));
+        return JSON.stringify({
+          observation: "观察到新增节点及属性配置",
+          action: { kind: "finish", reason: "已验证拖拽" },
+        });
+      }
+      return JSON.stringify({
+        observation: "空画布",
+        action: { kind: "drag", index: 0, targetIndex: 1, effect: "write" },
+      });
+    },
+  );
+  await service.start(p.id, "验证拖拽", 3);
+  for (let i = 0; i < 100 && service.state(p.id).run?.state === "running"; i++)
+    await new Promise((r) => setTimeout(r, 10));
+  const run = service.state(p.id).run!;
+  assert.equal(run.state, "draft");
+  assert.equal(run.steps[0].executed, true);
+  assert.equal(run.steps[0].submitted, false);
+  assert(run.steps[0].businessActionKey);
+  assert.equal(run.steps[1].observation, "观察到新增节点及属性配置");
+  await service.close();
+  db.close();
+});

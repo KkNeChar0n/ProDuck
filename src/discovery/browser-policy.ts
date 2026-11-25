@@ -54,13 +54,33 @@ export function validateDiscoveryAction(
   if (action.kind === "scroll" && ["up", "down"].includes(action.direction))
     return;
   if (
-    !["click", "fill", "select", "press"].includes(action.kind) ||
+    !["click", "fill", "select", "press", "drag"].includes(action.kind) ||
     !("index" in action) ||
     !Number.isInteger(action.index)
   )
     throw new Error("不支持的探索动作");
   const element = page.elements.find((e) => e.index === action.index);
   if (!element) throw new Error("元素已变化，请重新观察");
+  if (action.kind === "drag") {
+    if (
+      !Number.isInteger(action.targetIndex) ||
+      !page.elements.some((e) => e.index === action.targetIndex)
+    )
+      throw new Error("拖拽目标已变化，请重新观察");
+    for (const point of [action.from, action.to])
+      if (
+        point !== undefined &&
+        (!point ||
+          !Number.isFinite(point.x) ||
+          !Number.isFinite(point.y) ||
+          point.x < 0 ||
+          point.x > 1 ||
+          point.y < 0 ||
+          point.y > 1)
+      )
+        throw new Error("拖拽位置必须是元素内 0–1 的坐标");
+    return;
+  }
   if (action.kind === "fill") {
     if (
       !["INPUT", "TEXTAREA"].includes(element.tag) ||
@@ -135,6 +155,15 @@ export function businessActionIdentity(
     "index" in action
       ? page.elements.find((e) => e.index === action.index)
       : undefined;
+  if (action.kind === "drag") {
+    const target = page.elements.find((e) => e.index === action.targetIndex);
+    return JSON.stringify({
+      url: page.url,
+      kind: "drag",
+      source: el?.key || el?.label,
+      target: target?.key || target?.label,
+    });
+  }
   return JSON.stringify(
     isFormSubmission(el, action) && el?.form
       ? {
@@ -166,6 +195,15 @@ export function actionConfirmation(
     return null;
   const el = page.elements.find((e) => e.index === action.index);
   if (!el) return null;
+  if (
+    action.kind === "drag" &&
+    (action.effect !== "read" ||
+      mutation.test(el.label) ||
+      mutation.test(
+        page.elements.find((e) => e.index === action.targetIndex)?.label ?? "",
+      ))
+  )
+    return `拖拽「${el.label || el.tag}」到「${page.elements.find((e) => e.index === action.targetIndex)?.label || "目标区域"}」可能立即改变布局或业务数据，请确认本次操作。`;
   const activating =
     action.kind === "click" ||
     (action.kind === "press" && ["Enter", "Space"].includes(action.key));

@@ -1,3 +1,4 @@
+import { performDrag, type DragData } from "./drag.js";
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -28,7 +29,11 @@ export interface DiscoveryBrowser {
 }
 const inspect = `(() => {
   const visible = e => { const r = e.getBoundingClientRect(); const s = getComputedStyle(e); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
-  const all = [...document.querySelectorAll('a,button,input,select,textarea,[role="button"],[role="tab"],[role="treeitem"],[role="menuitem"],[role="link"],[role="combobox"],[role="option"],[role="checkbox"],[role="radio"],[tabindex],[onclick],summary')].filter(e => visible(e) && !e.disabled && !['password','hidden','file'].includes(e.type)).slice(0,160);
+  const all = [...document.querySelectorAll('a,button,input,select,textarea,[role="button"],[role="tab"],[role="treeitem"],[role="menuitem"],[role="link"],[role="combobox"],[role="option"],[role="checkbox"],[role="radio"],[tabindex],[onclick],summary,[draggable="true"],canvas,[role="application"],[role="region"],[role="list"],[role="listitem"],[data-droppable],[data-dropzone],[ondrop],[ondragover],[aria-dropeffect],[data-rfd-droppable-id],[data-rbd-droppable-id],main,section,svg,[role="grid"],[role="gridcell"],.react-flow__pane,.react-flow__node,.vue-flow__pane,.vue-flow__node')].filter(e => visible(e) && !e.disabled && !['password','hidden','file'].includes(e.type)).slice(0,160);
+  const extra = [...document.querySelectorAll('div,span,li,svg,g')].filter(e => visible(e) && ['grab','grabbing','move'].includes(getComputedStyle(e).cursor)).slice(0,60);
+  for (const e of extra) if (!all.includes(e)) all.push(e);
+  const path = e => { const parts=[]; for(;e && e.nodeType===1;e=e.parentElement){if(e.id){parts.unshift('#'+e.id);break;}parts.unshift(e.tagName+':'+[...e.parentElement?.children||[]].indexOf(e));}return parts.join('/'); };
+  const box = e => {const r=e.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height};};
   globalThis.__produckDiscoveryNodes = all;
   const label = e => (e.getAttribute('aria-label') || [...(e.labels || [])].map(l=>l.textContent).join(' ') || e.getAttribute('placeholder') || e.innerText || e.getAttribute('title') || e.getAttribute('name') || '').trim().slice(0,200);
   const formInfo = f => {
@@ -36,7 +41,7 @@ const inspect = `(() => {
     const path = e => { const parts=[]; for(;e && e.nodeType===1;e=e.parentElement){if(e.id){parts.unshift('#'+e.id);break;}parts.unshift(e.tagName+':'+[...e.parentElement?.children||[]].indexOf(e));}return parts.join('/'); };
     return {key:path(f),context:(f.closest('dialog,[role="dialog"]')?.querySelector('h1,h2,h3,[role="heading"]')?.textContent || f.querySelector('legend,h1,h2,h3')?.textContent || '').trim().slice(0,200),action:f.action,method:f.method,search:f.getAttribute('role')==='search' || fields.some(e=>e.type==='search' || /搜索|查询|筛选|search|filter/i.test(label(e))),submitLabels:fields.filter(e=>e.type==='submit').map(label),sensitive:fields.some(e=>['password','file'].includes(e.type)),valid:fields.every(e=>!e.willValidate || e.validity.valid),noValidate:f.noValidate};
   };
-  const elements = all.map((e,index) => ({index, tag:e.tagName, role:e.getAttribute('role') || '', type:e.type || '', inForm:!!e.form, submitsForm:!!e.form && ['BUTTON','INPUT'].includes(e.tagName) && e.type==='submit', label:label(e), ...(e.form ? {form:formInfo(e.form),skipsValidation:!!e.formNoValidate}:{}), ...(['INPUT','TEXTAREA','SELECT'].includes(e.tagName)?{value:String(e.value).slice(0,2000),checked:!!e.checked,required:!!e.required,valid:!e.willValidate || e.validity.valid,validationMessage:e.validationMessage?.slice(0,300)||''}:{}), ...(e.tagName === 'A' && e.href ? {href:e.href} : {}), ...(e.tagName === 'SELECT' ? {options:[...e.options].map(o=>o.value).slice(0,80)} : {})}));
+  const elements = all.map((e,index) => ({index, key:path(e), box:box(e), draggable:!!e.draggable, dragHint:!!e.draggable || ["grab","grabbing","move"].includes(getComputedStyle(e).cursor), tag:e.tagName, role:e.getAttribute('role') || '', type:e.type || '', inForm:!!e.form, submitsForm:!!e.form && ['BUTTON','INPUT'].includes(e.tagName) && e.type==='submit', label:label(e), ...(e.form ? {form:formInfo(e.form),skipsValidation:!!e.formNoValidate}:{}), ...(['INPUT','TEXTAREA','SELECT'].includes(e.tagName)?{value:String(e.value).slice(0,2000),checked:!!e.checked,required:!!e.required,valid:!e.willValidate || e.validity.valid,validationMessage:e.validationMessage?.slice(0,300)||''}:{}), ...(e.tagName === 'A' && e.href ? {href:e.href} : {}), ...(e.tagName === 'SELECT' ? {options:[...e.options].map(o=>o.value).slice(0,80)} : {})}));
   const structure = JSON.stringify([...document.body.querySelectorAll('*')].filter(visible).slice(0,350).map(e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect();return {tag:e.tagName, text:e.children.length?undefined:e.textContent?.slice(0,120), role:e.getAttribute('role'), box:{x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)}, style:{color:s.color,background:s.backgroundColor,font:s.font,padding:s.padding,display:s.display,border:s.border}, checked:e.checked, selected:e.tagName==='SELECT'?e.selectedIndex:undefined};}));
   return {title:document.title.slice(0,300),url:location.href,text:document.body.innerText.slice(0,14000),structure:structure.slice(0,45000),elements};
 })()`;
@@ -49,6 +54,7 @@ interface Session {
   writeAllowed: boolean;
   attempted: Set<string>;
   denied: Set<string>;
+  dragData?: DragData;
 }
 /** One user-visible Chrome process per project, private pipe and private profile. */
 export class ChromeDiscoveryBrowser implements DiscoveryBrowser {
@@ -129,6 +135,11 @@ export class ChromeDiscoveryBrowser implements DiscoveryBrowser {
           this.sessions.set(id, s);
           const current = s;
           pipe.onEvent = (message) => {
+            if (
+              message.method === "Input.dragIntercepted" &&
+              message.sessionId === current.session
+            )
+              current.dragData = message.params.data;
             if (message.method === "Fetch.requestPaused") {
               const { requestId, request, resourceType } = message.params;
               const allowed =
@@ -311,7 +322,7 @@ export class ChromeDiscoveryBrowser implements DiscoveryBrowser {
     const now = await this.observe(id);
     signal.throwIfAborted();
     if (
-      confirmation
+      confirmation || action.kind === "drag"
         ? now.fingerprint !== page.fingerprint
         : now.url !== page.url ||
           (element &&
@@ -324,7 +335,26 @@ export class ChromeDiscoveryBrowser implements DiscoveryBrowser {
     s.writeAllowed = !!confirmation;
     try {
       let expression = "";
-      if (action.kind === "back") {
+      if (action.kind === "drag") {
+        const points = await this.evaluate(
+          s,
+          `(() => {
+          const source=globalThis.__produckDiscoveryNodes[${action.index}],target=globalThis.__produckDiscoveryNodes[${action.targetIndex}];
+          const point=(e,p)=>{ if(!e?.isConnected) return null; const r=e.getBoundingClientRect();const x=r.x+r.width*p.x,y=r.y+r.height*p.y;const hit=document.elementFromPoint(x,y); if(x<0||y<0||x>=innerWidth||y>=innerHeight||!hit||!(e===hit||e.contains(hit)))return null; return {x,y}; };
+          return {from:point(source,${JSON.stringify(action.from ?? { x: 0.5, y: 0.5 })}),to:point(target,${JSON.stringify(action.to ?? { x: 0.5, y: 0.5 })})};
+        })()`,
+        );
+        if (!points.from || !points.to)
+          throw new Error("拖拽位置不可见或被遮挡，请滚动或关闭遮挡后重新观察");
+        s.dragData = undefined;
+        await performDrag(
+          (method, params) => s.pipe.send(method, params, s.session),
+          () => s.dragData,
+          points.from,
+          points.to,
+          signal,
+        );
+      } else if (action.kind === "back") {
         const history = await s.pipe.send(
           "Page.getNavigationHistory",
           {},

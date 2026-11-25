@@ -1,6 +1,6 @@
 {
   "name": "produck",
-  "version": "0.1.24",
+  "version": "0.1.25",
   "private": true,
   "description": "A local-first product manager agent for macOS",
   "type": "module",
@@ -20,6 +20,7 @@
     "test:python": "PRODUCK_TEST_PYTHON=1 node --import tsx --test tests/python-sandbox.test.ts",
     "build:native": "node scripts/build-native.mjs",
     "test:discovery": "node scripts/discovery-smoke.mjs",
+    "test:discovery:drag": "node scripts/discovery-drag-smoke.mjs",
     "test:discovery:forms": "node scripts/discovery-form-smoke.mjs",
     "test:discovery:crud": "node scripts/discovery-crud-smoke.mjs",
     "test:workbench": "node scripts/run-electron.mjs scripts/workbench-smoke.cjs",

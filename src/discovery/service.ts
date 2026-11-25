@@ -26,11 +26,20 @@ export type DiscoveryModel = (
   scope: string,
   prompt: string,
   signal: AbortSignal,
+  image?: Uint8Array,
 ) => Promise<string>;
 export function discoveryModel(models: ModelService): DiscoveryModel {
-  return async (scope, prompt, signal) => {
+  return async (scope, prompt, signal, image) => {
     const request = await models.request(scope, prompt, signal);
     request.maxTokens = 7000;
+    if (image && models.capabilities(scope)?.image === "supported")
+      request.image = {
+        mediaType: "image/png",
+        base64: Buffer.from(image).toString("base64"),
+      };
+    else if (image)
+      request.prompt +=
+        "\n当前模型未通过图像能力检测，没有附加截图。仅依据元素和文字定位；无法定位的画布内部内容须标为待验证，不猜测坐标。";
     let output = "";
     for await (const part of streamModel(request)) {
       output += part;
@@ -275,8 +284,13 @@ export class DiscoveryService {
           const answer = json(
             await this.model(
               scope,
-              `PRODUCK_DISCOVERY_STEP\n你是产品经理，自动深度体验产品的模块及新建/编辑全流程。${untrusted}\n${depthInstructions}\n只返回 JSON：{"observation":"当前模块、行为和待验证事项","action":{"kind":"click","index":0,"effect":"read"}}。action 可用 click(index)、fill(index,value，普通表单)、select(index,value)、press(index,key:Enter/Escape/Tab/ArrowDown/ArrowUp/ArrowLeft/ArrowRight/Space)、scroll(direction:up/down)、back、finish(reason)。优先访问未覆盖的模块、详情、筛选和弹窗，不重复无意义点击。用户已授权当前站点的自主浏览器交互，不要因控件名称陌生或需要展开侧栏而要求手动操作。每个操作标注 effect 为 read（浏览或修改未提交表单）、write（修改业务数据）或 unknown（无法判断实际后果）；业务写入由宿主请求单次确认，确认后仍由你执行。字段 value/required/valid/validationMessage 是本次观察结果；原生校验不通过时宿主不会派发提交事件，可填写后再提交。同一业务表单已尝试或拒绝后，不得换按钮或回车重复提交。登录与验证码交给用户。普通操作失败或用户拒绝时，重新观察并换其他入口，不重复失败动作；不要将一次拒绝视为整个任务失败。若已覆盖目标或无可执行动作，finish 并说明未覆盖项。索引只来自本次页面。\n续探说明：${run.continuedFrom ? "本轮继承已有依据。优先补齐覆盖清单缺失项及尚未访问的模块，重新判断历史阻碍；不得重放已尝试或已拒绝的业务提交。已完整体验的流程无需从头重复。" : "首次探索"}\n目标：${run.goal || "深入理解各业务模块，常规体验包含新建与编辑"}\n当前采集ID：${capture.id}\n体验清单：${JSON.stringify((run.coverage ?? []).map((c) => ({ module: c.module, flow: c.flow, checks: c.checks, evidenceIds: c.evidenceIds.slice(-3), limitation: c.limitation.slice(0, 200) })))}\n历史：${JSON.stringify(run.steps.slice(-12).map((s) => ({ captureId: s.captureId, module: s.module, flow: s.flow, observation: s.observation, action: s.action, result: s.result })))}\n交接资料概要：${JSON.stringify(run.sources.map((s) => ({ name: s.name, text: s.text.slice(0, 500), truncated: s.truncated })))}\n页面证据：${JSON.stringify({ title: page.title, url: safeUrl(page.url), text: page.text, elements: page.elements, blocked: page.blocked })}`,
+              `PRODUCK_DISCOVERY_STEP\n你是产品经理，自动深度体验产品的模块及新建/编辑全流程。${untrusted}\n${depthInstructions}\n只返回 JSON：{"observation":"当前模块、行为和待验证事项","action":{"kind":"click","index":0,"effect":"read"}}。action 可用 click(index)、fill(index,value，普通表单)、select(index,value)、press(index,key:Enter/Escape/Tab/ArrowDown/ArrowUp/ArrowLeft/ArrowRight/Space)、scroll(direction:up/down)、drag(index,targetIndex,from?:{x,y},to?:{x,y})、back、finish(reason)。拖拽位置是元素矩形内0–1的归一化坐标，省略为中心；可同一画布内指定不同起终点。draggable/dragHint 表示拖动线索，box 为视口CSS像素矩形。发现资源拖入、排序或画布节点时主动体验；先根据元素或已提供截图识别源目标，视口外先滚动再观察，不猜不可见对象。拖拽后必须在下一次观察核对新增节点、顺序、位置及关联配置变化；仅事件派发不等于成功，无变化如实记录。拖拽可能自动保存，不能仅因没有保存按钮就标为read，不明后果标unknown。优先访问未覆盖的模块、详情、筛选和弹窗，不重复无意义点击。用户已授权当前站点的自主浏览器交互，不要因控件名称陌生或需要展开侧栏而要求手动操作。每个操作标注 effect 为 read（浏览或修改未提交表单）、write（修改业务数据）或 unknown（无法判断实际后果）；业务写入由宿主请求单次确认，确认后仍由你执行。字段 value/required/valid/validationMessage 是本次观察结果；原生校验不通过时宿主不会派发提交事件，可填写后再提交。同一业务表单已尝试或拒绝后，不得换按钮或回车重复提交。登录与验证码交给用户。普通操作失败或用户拒绝时，重新观察并换其他入口，不重复失败动作；不要将一次拒绝视为整个任务失败。若已覆盖目标或无可执行动作，finish 并说明未覆盖项。索引只来自本次页面。\n续探说明：${run.continuedFrom ? "本轮继承已有依据。优先补齐覆盖清单缺失项及尚未访问的模块，重新判断历史阻碍；不得重放已尝试或已拒绝的业务提交。已完整体验的流程无需从头重复。" : "首次探索"}\n目标：${run.goal || "深入理解各业务模块，常规体验包含新建与编辑"}\n当前采集ID：${capture.id}\n体验清单：${JSON.stringify((run.coverage ?? []).map((c) => ({ module: c.module, flow: c.flow, checks: c.checks, evidenceIds: c.evidenceIds.slice(-3), limitation: c.limitation.slice(0, 200) })))}\n历史：${JSON.stringify(run.steps.slice(-12).map((s) => ({ captureId: s.captureId, module: s.module, flow: s.flow, observation: s.observation, action: s.action, result: s.result })))}\n交接资料概要：${JSON.stringify(run.sources.map((s) => ({ name: s.name, text: s.text.slice(0, 500), truncated: s.truncated })))}\n页面证据：${JSON.stringify({ title: page.title, url: safeUrl(page.url), text: page.text, elements: page.elements, blocked: page.blocked })}`,
               signal,
+              page.elements.some(
+                (e) => ["CANVAS", "svg"].includes(e.tag) || e.dragHint,
+              )
+                ? page.png
+                : undefined,
             ),
           );
           if (
@@ -435,7 +449,7 @@ export class DiscoveryService {
       const response = json(
         await this.model(
           scope,
-          `PRODUCK_DISCOVERY_REPORT\n请整合证据生成中文产品理解。${untrusted}\n输出 JSON：{"overview":"产品定位、用户与目标","modules":[{"name":"模块名","understanding":"职责、页面组成、字段与业务规则；区分观察和推断","flows":["触发→操作→观察结果；注明仅资料描述的流程"],"evidenceIds":["页面或资料 ID"],"unknowns":["未覆盖或待验证"]}],"conflicts":["资料与页面或旧记忆冲突"],"limitations":["范围、被阻止请求、预算与截断"]}。最多12个模块，每个模块必须引用给出的真实证据 ID。体验记录仅提供最近40步，较早的新建/编辑覆盖清单由宿主追加，不得将近期记录未包含的流程断言为未执行。禁止编造访问记录。正文总计不超过12000字。\n目标：${run.goal}\n页面证据（每页摘录400字）：${JSON.stringify(evidence)}\n体验记录：${JSON.stringify(run.steps.slice(-40).map((s) => ({ captureId: s.captureId, module: s.module, flow: s.flow, observation: s.observation.slice(0, Math.min(250, Math.floor(6000 / Math.min(40, run.steps.length)))), result: s.result.slice(0, Math.min(200, Math.floor(6000 / Math.min(40, run.steps.length)))) })))}\n交接资料：${JSON.stringify(run.sources)}\n上轮报告（可能未经审核，仅供补齐与比对）：${previousDraft}\n原已审核理解（供比较，非当前观察）：${previous?.markdown.slice(0, 2000) || "无"}`,
+          `PRODUCK_DISCOVERY_REPORT\n请整合证据生成中文产品理解。${untrusted}\n输出 JSON：{"overview":"产品定位、用户与目标","modules":[{"name":"模块名","understanding":"职责、页面组成、字段与业务规则；区分观察和推断","flows":["触发→操作→观察结果；注明仅资料描述的流程"],"evidenceIds":["页面或资料 ID"],"unknowns":["未覆盖或待验证"]}],"conflicts":["资料与页面或旧记忆冲突"],"limitations":["范围、被阻止请求、预算与截断"]}。最多12个模块，每个模块必须引用给出的真实证据 ID。体验记录仅提供最近40步，较早的新建/编辑覆盖清单由宿主追加，不得将近期记录未包含的流程断言为未执行。拖拽效果须引用动作前后页面，核对新增节点、顺序、位置和联动；只有事件派发或缺少后续观察时标为待验证，不宣称成功。禁止编造访问记录。正文总计不超过12000字。\n目标：${run.goal}\n页面证据（每页摘录400字）：${JSON.stringify(evidence)}\n体验记录：${JSON.stringify(run.steps.slice(-40).map((s) => ({ captureId: s.captureId, action: s.action, executed: s.executed, module: s.module, flow: s.flow, observation: s.observation.slice(0, Math.min(250, Math.floor(6000 / Math.min(40, run.steps.length)))), result: s.result.slice(0, Math.min(200, Math.floor(6000 / Math.min(40, run.steps.length)))) })))}\n交接资料：${JSON.stringify(run.sources)}\n上轮报告（可能未经审核，仅供补齐与比对）：${previousDraft}\n原已审核理解（供比较，非当前观察）：${previous?.markdown.slice(0, 2000) || "无"}`,
           signal,
         ),
       );
@@ -520,7 +534,7 @@ export function renderUnderstanding(value: any, run: DiscoveryRun) {
     strings(value.conflicts)
       .map((x) => "- " + x)
       .join("\n") || "- 未报告冲突，不代表所有材料一致。"
-  }\n\n## 覆盖限制\n- 本轮新增观察 ${run.captureIds.length - (run.roundStart ?? 0)} 个页面状态，预算 ${run.budget - (run.roundStart ?? 0)} 步；累计依据 ${run.captureIds.length} 个状态；页面只传文字和结构，截图留作依据，未进行模型视觉分析。\n${strings(
+  }\n\n## 覆盖限制\n- 本轮新增观察 ${run.captureIds.length - (run.roundStart ?? 0)} 个页面状态，预算 ${run.budget - (run.roundStart ?? 0)} 步；累计依据 ${run.captureIds.length} 个状态；截图保存为依据；拖拽或画布页面仅在模型图像能力已通过检测时附加截图，否则使用文字和结构，无法定位的内部内容保持待验证。\n${strings(
     value.limitations,
   )
     .map((x) => "- " + x)
