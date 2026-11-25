@@ -1,8 +1,9 @@
-import type { ModelProvider } from "../contracts/models.js";
+import type { ModelProvider, ReasoningEffort } from "../contracts/models.js";
 export interface ModelRequest {
   provider: ModelProvider;
   endpoint: string;
   model: string;
+  reasoningEffort?: ReasoningEffort;
   token: string;
   prompt: string;
   signal?: AbortSignal;
@@ -66,6 +67,9 @@ function requestBody(input: ModelRequest, stream: boolean) {
           : {}),
       }
     : {
+        ...(input.reasoningEffort && input.reasoningEffort !== "default"
+          ? { reasoning_effort: input.reasoningEffort }
+          : {}),
         model: input.model,
         stream,
         messages: [
@@ -162,6 +166,14 @@ async function send(
     throw new Error("模型或接口不存在，请检查 Base URL 和模型名称");
   if (response.status === 429)
     throw new Error("模型请求受限，请检查额度或稍后重试");
+  if (
+    response.status === 400 &&
+    input.reasoningEffort &&
+    input.reasoningEffort !== "default"
+  )
+    throw new Error(
+      "模型请求参数被拒绝，请尝试将推理强度改为供应商默认，并检查模型名称。",
+    );
   if (!response.ok)
     throw new Error(`模型服务请求失败（HTTP ${response.status}）`);
   return response;

@@ -1,14 +1,23 @@
+export type ReasoningEffort =
+  "default" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh";
+export type ModelCatalogInput = {
+  provider: ModelProvider;
+  endpoint: string;
+  token?: string;
+};
 export type ModelProvider = "openai-compatible" | "anthropic";
 export interface ModelProfile {
   provider: ModelProvider;
   endpoint: string;
   model: string;
+  reasoningEffort?: ReasoningEffort;
   hasCredential: boolean;
 }
 export interface ModelInput {
   provider: ModelProvider;
   endpoint: string;
   model: string;
+  reasoningEffort?: ReasoningEffort;
   token?: string;
 }
 export interface ModelDelta {

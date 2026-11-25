@@ -41,7 +41,9 @@ const db = openProjectDatabase(join(root, "test.sqlite"));
 const projects = new ProjectRepository(db, join(root, "state.json"));
 const project = projects.create("虚构客户产品验收", root);
 const release = projects.createRelease(project.id, "真实模型验收");
-db.prepare("INSERT INTO model_profiles VALUES(?,?,?,?,?)").run(
+db.prepare(
+  "INSERT INTO model_profiles(id,provider,endpoint,model,credential_ref) VALUES(?,?,?,?,?)",
+).run(
   project.id,
   profile.provider,
   profile.endpoint,

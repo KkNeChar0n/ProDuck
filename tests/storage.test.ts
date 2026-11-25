@@ -142,3 +142,36 @@ test("v1 database upgrades with a backup and preserves project rows", () => {
   );
   db.close();
 });
+
+test("v4 migration preserves existing model configuration with default reasoning", () => {
+  const path = join(fixture(), "models.sqlite");
+  let db = openProjectDatabase(
+    path,
+    migrations.filter((m) => m.version <= 3),
+  );
+  db.prepare("INSERT INTO model_profiles VALUES(?,?,?,?,?)").run(
+    "p",
+    "openai-compatible",
+    "https://example.com/v1",
+    "legacy",
+    "reference",
+  );
+  db.close();
+  db = openProjectDatabase(path);
+  assert.deepEqual(
+    {
+      ...db
+        .prepare(
+          "SELECT model, credential_ref, reasoning_effort FROM model_profiles",
+        )
+        .get(),
+    },
+    {
+      model: "legacy",
+      credential_ref: "reference",
+      reasoning_effort: "default",
+    },
+  );
+  assert(existsSync(path + ".v3.backup"));
+  db.close();
+});

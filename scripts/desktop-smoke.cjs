@@ -320,6 +320,16 @@ const wait = async (w, expression, timeoutMs = 10000) => {
   );
   let failBatchOnce = true;
   server = createServer((req, res) => {
+    if (req.method === "GET" && req.url === "/v1/models") {
+      assert.equal(req.headers.authorization, "Bearer synthetic-desktop-token");
+      res.setHeader("Content-Type", "application/json");
+      res.end(
+        JSON.stringify({
+          data: [{ id: "fixture" }, { id: "fixture-alternative" }],
+        }),
+      );
+      return;
+    }
     if (req.method === "GET") {
       res.setHeader("Content-Type", "text/html;charset=utf-8");
       res.end(require("node:fs").readFileSync("tests/fixtures/customers.html"));
@@ -334,6 +344,7 @@ const wait = async (w, expression, timeoutMs = 10000) => {
         return;
       }
       const data = JSON.parse(body);
+      assert.equal(data.reasoning_effort, "high");
       if (data.stream) {
         res.writeHead(200, { "Content-Type": "text/event-stream" });
         let content = data.messages[0].content.includes("原型工程师")
@@ -508,9 +519,61 @@ const wait = async (w, expression, timeoutMs = 10000) => {
   });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
   const profile = await wc.executeJavaScript(
-    `window.produck.models.save(${JSON.stringify(first.id)},{provider:'openai-compatible',endpoint:'http://127.0.0.1:${server.address().port}/v1',model:'fixture',token:'synthetic-desktop-token'})`,
+    `window.produck.models.save(${JSON.stringify(first.id)},{provider:'openai-compatible',endpoint:'http://127.0.0.1:${server.address().port}/v1',model:'fixture',reasoningEffort:'high',token:'synthetic-desktop-token'})`,
   );
   assert.equal(profile.hasCredential, true);
+  await wc.executeJavaScript(
+    `document.querySelector('[aria-label="项目设置"]').click()`,
+  );
+  await wait(
+    window,
+    `document.querySelector('#model-id') && !document.querySelector('#model-id').disabled`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='读取 / 刷新模型列表').click()`,
+  );
+  await wait(window, `document.body.innerText.includes('已读取 2 个模型')`);
+  assert.equal(
+    await wc.executeJavaScript(`document.querySelector('#model-id').tagName`),
+    "SELECT",
+  );
+  assert.equal(
+    await wc.executeJavaScript(`document.querySelector('#model-effort').value`),
+    "high",
+  );
+  await wc.executeJavaScript(
+    `document.querySelector('#model-id').value='fixture-alternative';document.querySelector('#model-id').dispatchEvent(new Event('change',{bubbles:true}))`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='保存模型配置').click()`,
+  );
+  await wait(window, `document.body.innerText.includes('模型配置已保存')`);
+  assert.equal(
+    (
+      await wc.executeJavaScript(
+        `window.produck.models.profile(${JSON.stringify(first.id)})`,
+      )
+    ).model,
+    "fixture-alternative",
+  );
+  await wc.executeJavaScript(
+    `document.querySelector('#model-id').scrollIntoView({block:"start"})`,
+  );
+  await wc.executeJavaScript(
+    `new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`,
+  );
+  writeFileSync(
+    "docs/verification/desktop-model-settings.png",
+    (await wc.capturePage()).toPNG(),
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('.nav')).find(b=>b.textContent.includes('工作台')).click()`,
+  );
+
+  await wait(window, `document.querySelector('[role=tablist]')!==null`);
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('[role=tab]')).find(b=>b.textContent==='交接资料').click()`,
+  );
   assert(!JSON.stringify(profile).includes("synthetic-desktop-token"));
   const { DatabaseSync } = require("node:sqlite");
   const checkDb = new DatabaseSync(join(root, "profile", "projects.sqlite"));

@@ -135,6 +135,8 @@ contextBridge.exposeInMainWorld(
       cancel: (id: string) => ipcRenderer.invoke("documents:cancel", id),
     },
     models: {
+      catalog: (id: string, input: unknown) =>
+        ipcRenderer.invoke("models:catalog", id, input),
       capabilities: (id: string) =>
         ipcRenderer.invoke("models:capabilities", id),
       probe: (id: string) => ipcRenderer.invoke("models:probe", id),

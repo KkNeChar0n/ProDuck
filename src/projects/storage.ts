@@ -121,6 +121,10 @@ ALTER TABLE task_runs ADD COLUMN release_id TEXT REFERENCES releases(id);
 UPDATE task_runs SET release_id=project_id;
 `,
   },
+  {
+    version: 4,
+    sql: "ALTER TABLE model_profiles ADD COLUMN reasoning_effort TEXT NOT NULL DEFAULT 'default';",
+  },
 ];
 
 export function openProjectDatabase(

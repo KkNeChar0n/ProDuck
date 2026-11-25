@@ -207,3 +207,28 @@ test("unsupported image payload and missing tool call do not report supported ca
   assert.equal(report.image, "unsupported");
   assert.equal(report.tools, "unsupported");
 });
+
+test("reasoning effort is sent only when explicitly selected on compatible requests", async () => {
+  for (const effort of [
+    undefined,
+    "default",
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+  ] as const) {
+    await testModel({ ...input, reasoningEffort: effort }, (async (
+      _url,
+      init,
+    ) => {
+      const body = JSON.parse(String(init?.body));
+      assert.equal(
+        body.reasoning_effort,
+        effort === "default" ? undefined : effort,
+      );
+      return new Response(
+        JSON.stringify({ choices: [{ message: { content: "OK" } }] }),
+      );
+    }) as typeof fetch);
+  }
+});

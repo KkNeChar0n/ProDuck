@@ -46,7 +46,9 @@ const moduleAt = (path) => import(pathToFileURL(resolve("dist", path)).href);
   const projects = new ProjectRepository(db, join(temporary, "state.json")),
     project = projects.create("合成客户页面验证", temporary);
   const release = projects.createRelease(project.id, "真实模型验收");
-  db.prepare("INSERT INTO model_profiles VALUES(?,?,?,?,?)").run(
+  db.prepare(
+    "INSERT INTO model_profiles(id,provider,endpoint,model,credential_ref) VALUES(?,?,?,?,?)",
+  ).run(
     project.id,
     profile.provider,
     profile.endpoint,

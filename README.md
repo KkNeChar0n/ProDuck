@@ -89,7 +89,7 @@ python3 tests/prototype_smoke.py
 npm run package:mac
 ```
 
-输出 `release/Produck-0.1.23-arm64-test.dmg`，包含 Electron、编译后的钥匙串程序与应用资源。目标最低系统为 macOS 13，当前只在 macOS 26.3 arm64 上构建和检查；尚未在最低系统或无开发工具的机器完成验收。
+输出 `release/Produck-0.1.24-arm64-test.dmg`，包含 Electron、编译后的钥匙串程序与应用资源。目标最低系统为 macOS 13，当前只在 macOS 26.3 arm64 上构建和检查；尚未在最低系统或无开发工具的机器完成验收。
 
 包使用临时签名，未完成 Developer ID 签名和公证，不用于公开分发。安装包未提交 Git；第三方运行组件许可证随包保存。打包验证不代表真实模型与平台集成已通过。
 
@@ -114,3 +114,5 @@ npm run package:mac
 ### 自动理解产品
 
 在「工作台 → 理解产品」打开独立 Chrome，登录后开始自动探索。可先导入交接资料；Agent 将页面和资料整理成分模块 Markdown，供编辑审核。通过后作为项目长期记忆，普通问答和 Agent 可调用，再基于多页面证据生成统一候选原型。需要本机安装 Google Chrome，无需配置调试端口。详细操作和覆盖限制见 [Chrome 产品理解验收](docs/verification/product-discovery.md)。
+
+项目设置中的「读取 / 刷新模型列表」使用当前服务地址和 token 读取模型 ID，下拉选择后保存；服务不提供列表时可手动填写。OpenAI-compatible 支持项目级推理强度，推荐先用供应商默认。模型目录不证明某档位受支持；非默认档位请保存后测试。Anthropic 暂使用默认推理设置。

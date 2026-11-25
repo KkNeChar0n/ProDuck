@@ -231,6 +231,10 @@ export interface DesktopBridge {
     cancel(id: string): Promise<void>;
   };
   models: {
+    catalog(
+      projectId: string,
+      input: import("./models.js").ModelCatalogInput,
+    ): Promise<string[]>;
     capabilities(id: string): Promise<CapabilityReport | null>;
     probe(id: string): Promise<CapabilityReport>;
     profile(projectId: string): Promise<ModelProfile | null>;

@@ -1,3 +1,8 @@
+import { listModels } from "./model-catalog.js";
+import type {
+  ModelCatalogInput,
+  ReasoningEffort,
+} from "../contracts/models.js";
 import { owningProject } from "../projects/releases.js";
 import type { CapabilityReport, ModelCapability } from "../contracts/models.js";
 import { probeCapabilities } from "./model-client.js";
@@ -29,6 +34,9 @@ export class ModelService {
           provider: row.provider as ModelProfile["provider"],
           endpoint: String(row.endpoint),
           model: String(row.model),
+          reasoningEffort: String(
+            row.reasoning_effort ?? "default",
+          ) as ReasoningEffort,
           hasCredential: Boolean(row.credential_ref),
         }
       : null;
@@ -44,6 +52,20 @@ export class ModelService {
       input.model.length > 200
     )
       throw new Error("模型配置无效");
+    const effort = input.reasoningEffort ?? "default";
+    if (
+      ![
+        "default",
+        "none",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+      ].includes(effort) ||
+      (input.provider === "anthropic" && effort !== "default")
+    )
+      throw new Error("该供应商不支持此推理强度配置");
     const endpoint = validateEndpoint(input.endpoint);
     if (input.token !== undefined && typeof input.token !== "string")
       throw new Error("凭证格式无效");
@@ -62,7 +84,7 @@ export class ModelService {
     try {
       this.db
         .prepare(
-          "INSERT INTO model_profiles(id,provider,endpoint,model,credential_ref) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET provider=excluded.provider,endpoint=excluded.endpoint,model=excluded.model,credential_ref=excluded.credential_ref",
+          "INSERT INTO model_profiles(id,provider,endpoint,model,credential_ref,reasoning_effort) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET provider=excluded.provider,endpoint=excluded.endpoint,model=excluded.model,credential_ref=excluded.credential_ref,reasoning_effort=excluded.reasoning_effort",
         )
         .run(
           projectId,
@@ -70,6 +92,7 @@ export class ModelService {
           endpoint,
           input.model.trim(),
           reference,
+          effort,
         );
     } catch (error) {
       if (input.token) await this.credentials.delete(reference);
@@ -80,7 +103,8 @@ export class ModelService {
       !old ||
       old.endpoint !== endpoint ||
       old.model !== input.model.trim() ||
-      old.provider !== input.provider
+      old.provider !== input.provider ||
+      old.reasoning_effort !== effort
     )
       this.db
         .prepare("DELETE FROM model_capabilities WHERE project_id=?")
@@ -89,6 +113,33 @@ export class ModelService {
     if (input.token && old?.credential_ref && old.credential_ref !== reference)
       await this.credentials.delete(String(old.credential_ref)).catch(() => {});
     return this.profile(projectId)!;
+  }
+  async catalog(
+    projectId: string,
+    input: ModelCatalogInput,
+    transport: typeof fetch = fetch,
+  ): Promise<string[]> {
+    const row = this.row(projectId);
+    if (
+      !input ||
+      !["openai-compatible", "anthropic"].includes(input.provider) ||
+      (input.token !== undefined && typeof input.token !== "string")
+    )
+      throw new Error("模型配置无效");
+    const endpoint = validateEndpoint(input.endpoint);
+    let token = input.token;
+    if (!token) {
+      if (
+        !row?.credential_ref ||
+        row.provider !== input.provider ||
+        row.endpoint !== endpoint
+      )
+        throw new Error("请填写当前服务的 API token 后读取模型列表");
+      token =
+        (await this.credentials.get(String(row.credential_ref))) ?? undefined;
+    }
+    if (!token) throw new Error("钥匙串中未找到凭证，请重新填写 token");
+    return listModels({ ...input, endpoint, token }, transport);
   }
   capabilities(projectId: string): CapabilityReport | null {
     projectId = owningProject(this.db, projectId);
@@ -139,6 +190,9 @@ export class ModelService {
       provider: row.provider as ModelRequest["provider"],
       endpoint: String(row.endpoint),
       model: String(row.model),
+      reasoningEffort: String(
+        row.reasoning_effort ?? "default",
+      ) as ReasoningEffort,
       token,
       prompt,
       signal,

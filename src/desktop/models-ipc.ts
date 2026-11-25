@@ -22,6 +22,17 @@ export function registerModelIpc(
     )
       throw new Error("Untrusted caller");
   }
+  ipcMain.handle(
+    "models:catalog",
+    (
+      e,
+      id: string,
+      input: import("../contracts/models.js").ModelCatalogInput,
+    ) => {
+      trusted(e);
+      return service.catalog(id, input);
+    },
+  );
   ipcMain.handle("models:capabilities", (e, id: string) => {
     trusted(e);
     return service.capabilities(id);

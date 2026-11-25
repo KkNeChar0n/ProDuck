@@ -11,7 +11,7 @@ export function ProjectSettings({ project }: { project: Project }) {
       <p className="muted">
         以下配置由本项目的所有版本共享。飞书迭代地址请点击版本右侧的齿轮设置。
       </p>
-      <ModelSettings projectId={project.id} />
+      <ModelSettings key={project.id} projectId={project.id} />
       <div className="info-row">
         <div>
           工作空间<small className="path">{project.workspace}</small>
