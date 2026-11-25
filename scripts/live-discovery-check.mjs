@@ -1,7 +1,13 @@
 // Explicit opt-in live model acceptance on synthetic local data only.
 import { DatabaseSync } from "node:sqlite";
 import { createServer } from "node:http";
-import { mkdtempSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  readFileSync,
+  mkdirSync,
+  writeFileSync,
+  appendFileSync,
+} from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -54,7 +60,13 @@ const server = createServer((req, res) => {
     return;
   }
   res.setHeader("Content-Type", "text/html;charset=utf-8");
-  res.end(readFileSync("tests/fixtures/customers.html"));
+  res.end(
+    readFileSync(
+      process.argv.includes("--deep")
+        ? "tests/fixtures/customers-crud.html"
+        : "tests/fixtures/customers.html",
+    ),
+  );
 });
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const origin = `http://127.0.0.1:${server.address().port}`;
@@ -67,14 +79,24 @@ const browser = new ChromeDiscoveryBrowser(
     return true;
   },
 );
-const service = new DiscoveryService(projects, browser, discoveryModel(models));
+const realModel = discoveryModel(models);
+const service = new DiscoveryService(projects, browser, async (...args) => {
+  const response = await realModel(...args);
+  appendFileSync(
+    join(out, "model-responses.jsonl"),
+    JSON.stringify({ response }) + "\n",
+  );
+  return response;
+});
 try {
   await service.open(release.id, origin);
   await delay(700);
   await service.start(
     release.id,
-    "体验客户列表的名称搜索、状态筛选、重置与空态，新增弹窗的必填校验、取消和成功反馈。仅使用虚构测试数据。准确区分实际观察与未覆盖流程。",
-    20,
+    process.argv.includes("--deep")
+      ? ""
+      : "体验客户列表的名称搜索、状态筛选、重置与空态，新增弹窗的必填校验、取消和成功反馈。仅使用虚构测试数据。准确区分实际观察与未覆盖流程。",
+    process.argv.includes("--deep") ? 40 : 20,
   );
   const deadline = Date.now() + 12 * 60 * 1000;
   let count = -1,

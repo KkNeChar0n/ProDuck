@@ -75,9 +75,9 @@ export class UnderstandingRepository {
     if (
       typeof markdown !== "string" ||
       !markdown.trim() ||
-      markdown.length > 18000
+      markdown.length > 60000
     )
-      throw new Error("理解文档需要 1–18000 字");
+      throw new Error("理解文档需要 1–60000 字");
     const evidenceHash = this.evidence(scope, run);
     const report: Understanding = {
       id: randomUUID(),

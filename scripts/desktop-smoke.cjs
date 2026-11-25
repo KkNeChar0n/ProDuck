@@ -1339,7 +1339,10 @@ const wait = async (w, expression, timeoutMs = 10000) => {
   await wc.executeJavaScript(
     `document.querySelector('[aria-label="产品 Chrome 地址"]').form.requestSubmit()`,
   );
-  await wait(window, `document.body.innerText.includes('Chrome 已打开')`);
+  await wait(
+    window,
+    `document.body.innerText.includes('Chrome 已打开') && Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='授权并开始自动体验' && !b.disabled)`,
+  );
   await wc.executeJavaScript(
     `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='授权并开始自动体验').click()`,
   );

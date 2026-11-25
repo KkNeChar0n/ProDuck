@@ -1,3 +1,4 @@
+import { checks, checkNames } from "../../discovery/coverage";
 import { useEffect, useRef, useState } from "react";
 import type { DiscoveryState } from "../../contracts/discovery";
 import { desktop, errorText } from "../bridge";
@@ -10,7 +11,7 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
   });
   const [url, setUrl] = useState(""),
     [goal, setGoal] = useState(""),
-    [budget, setBudget] = useState(12);
+    [budget, setBudget] = useState(40);
   const [selected, setSelected] = useState(""),
     [markdown, setMarkdown] = useState("");
   const [busy, setBusy] = useState(false),
@@ -80,7 +81,7 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
       </p>
       <p>
         每个项目保留独立登录状态。可先在「交接资料」导入已有文档，Agent
-        会结合页面与资料整理理解。
+        会结合页面与资料整理理解。默认深入体验各模块的新建和编辑，包括字段、校验、取消与保存结果。
       </p>
       <form
         className="url-form"
@@ -111,7 +112,7 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
           maxLength={2000}
           value={goal}
           onChange={(e) => setGoal(e.target.value)}
-          placeholder="如：重点理解主要模块、列表筛选、详情查看和关键操作流程"
+          placeholder="如：优先体验客户与订单模块，检查新建、编辑、字段联动和状态变化"
           disabled={busy || running}
         />
       </label>
@@ -123,7 +124,7 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
             aria-describedby="discovery-budget-help"
             type="number"
             min={2}
-            max={30}
+            max={120}
             value={budget}
             onChange={(e) => setBudget(Number(e.target.value))}
             disabled={busy || running}
@@ -153,8 +154,8 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
         )}
       </div>
       <p className="muted" id="discovery-budget-help">
-        通常保留默认 12 步即可。聚焦一个流程可选 6–8 步，初步了解多个模块可选
-        20–30 步。
+        默认 40 步，常规包含新建与编辑。单模块可选 20–40 步，多个模块可选 60–120
+        步。
         一步是观察一次页面状态并决定下一步操作；弹窗和筛选结果也可能各占一步，不等于模块数量。
         步数越多通常耗时和模型用量越高，Agent
         也可能提前结束；达到上限后会整理已有依据，不代表已完整理解产品。
@@ -215,6 +216,32 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
               </button>
             </div>
           )}
+          {!!state.run.coverage?.length && (
+            <details open>
+              <summary>新建与编辑体验清单</summary>
+              <p className="muted">
+                按页面依据评估，未勾选不代表系统没有该功能。校验约束与页面提示行为分别核对。
+              </p>
+              {state.run.coverage.map((row) => (
+                <section key={`${row.module}-${row.flow}`}>
+                  <strong>
+                    {row.module} · {row.flow === "create" ? "新建" : "编辑"}（
+                    {row.checks.length}/5）
+                  </strong>
+                  <p>
+                    {checks
+                      .map(
+                        (c) =>
+                          `${row.checks.includes(c) ? "✓" : "○"} ${checkNames[c]}`,
+                      )
+                      .join(" · ")}
+                  </p>
+                  {row.detail && <p>{row.detail}</p>}
+                  {row.limitation && <p>未覆盖原因：{row.limitation}</p>}
+                </section>
+              ))}
+            </details>
+          )}
           <details>
             <summary>查看探索记录与未覆盖项</summary>
             {state.run.steps.map((s, i) => (
@@ -266,7 +293,7 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
                 aria-label="模块理解 Markdown"
                 rows={20}
                 value={markdown}
-                maxLength={18000}
+                maxLength={60000}
                 disabled={busy || running}
                 onChange={(e) => setMarkdown(e.target.value)}
               />

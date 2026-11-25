@@ -151,7 +151,7 @@ try {
     if (result.run.state !== "running") break;
   }
   assert.equal(result.run.state, "draft", result.run.message);
-  assert.equal(result.run.captureIds.length, 4);
+  assert.equal(result.run.captureIds.length, 6);
   assert.equal(result.activeReportId, null);
   const report = result.reports[0];
   assert(report.markdown.includes("客户"));
@@ -188,7 +188,7 @@ try {
     undefined,
     { understanding: { id: report.id, digest: report.digest } },
   );
-  assert.equal(candidate.sourceRefs.length, 4);
+  assert.equal(candidate.sourceRefs.length, 6);
   assert.equal(candidate.approved, false);
   assert(generatorPrompt.includes("已审核产品理解"));
   assert(generatorPrompt.includes("客户与订单管理产品"));
@@ -296,7 +296,7 @@ try {
         checkedAt: new Date().toISOString(),
         chrome: true,
         modules: 2,
-        captures: 4,
+        captures: 6,
         profileIsolation: true,
         loginRetained: true,
         unapprovedWritesBlocked: true,
@@ -306,7 +306,7 @@ try {
         genericInput: true,
         keyboard: true,
         approvedUnderstanding: true,
-        candidateSources: 4,
+        candidateSources: 6,
         model: "synthetic fixture; not a real model quality assessment",
       },
       null,

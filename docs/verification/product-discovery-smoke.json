@@ -1,8 +1,8 @@
 {
-  "checkedAt": "2026-11-24T09:09:03.692Z",
+  "checkedAt": "2026-11-25T02:06:13.686Z",
   "chrome": true,
   "modules": 2,
-  "captures": 4,
+  "captures": 6,
   "profileIsolation": true,
   "loginRetained": true,
   "unapprovedWritesBlocked": true,
@@ -12,6 +12,6 @@
   "genericInput": true,
   "keyboard": true,
   "approvedUnderstanding": true,
-  "candidateSources": 4,
+  "candidateSources": 6,
   "model": "synthetic fixture; not a real model quality assessment"
 }

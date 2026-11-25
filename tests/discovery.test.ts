@@ -284,7 +284,8 @@ test("automatic discovery combines handoff evidence, preserves cancellation and 
   await service.resume(p.id, first.id);
   state = await settled();
   assert.equal(state.run?.state, "draft");
-  assert.equal(state.run?.captureIds.length, 2);
+  assert.equal(state.run?.captureIds.length, 4);
+  assert.equal(state.run?.finishCorrections, 2);
   assert.equal(actions, 0);
   assert.equal(manual, 2);
   assert.equal(state.activeReportId, null);
@@ -550,7 +551,7 @@ test("no-dispatch validation permits later submission; persisted intent blocks a
   assert.equal(actions, 2);
   assert.equal(service.state(p.id).run!.steps[0].businessActionKey, undefined);
   assert(
-    service.state(p.id).run!.steps[1].businessActionKey?.startsWith("v2:"),
+    service.state(p.id).run!.steps[1].businessActionKey?.startsWith("v3:"),
   );
   await service.resume(p.id, run.id);
   await settle();

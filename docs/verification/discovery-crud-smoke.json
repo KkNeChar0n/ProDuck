@@ -1,0 +1,13 @@
+{
+  "checkedAt": "2026-11-25T02:10:03.945Z",
+  "createCancel": true,
+  "createValidation": true,
+  "createSave": true,
+  "editPrefill": true,
+  "editCancelPreservesRecord": true,
+  "editValidation": true,
+  "editSave": true,
+  "sharedDialogContext": true,
+  "repeatedEditBlocked": true,
+  "confirmations": 2
+}

@@ -15,6 +15,7 @@ export interface DiscoveryElement {
   validationMessage?: string;
   form?: {
     key: string;
+    context?: string;
     action: string;
     method: string;
     search: boolean;
@@ -54,6 +55,16 @@ export type DiscoveryAction = (
   | { kind: "back" }
   | { kind: "finish"; reason: string }
 ) & { effect?: "read" | "write" | "unknown" };
+export type DiscoveryCheck =
+  "entry" | "fields" | "validation" | "cancel" | "save";
+export interface DiscoveryCoverage {
+  module: string;
+  flow: "create" | "edit";
+  checks: DiscoveryCheck[];
+  evidenceIds: string[];
+  detail: string;
+  limitation: string;
+}
 export interface DiscoveryRun {
   id: string;
   projectId: string;
@@ -65,12 +76,18 @@ export interface DiscoveryRun {
   message: string;
   createdAt: string;
   captureIds: string[];
+  coverage?: DiscoveryCoverage[];
+  finishCorrections?: number;
   steps: {
     captureId: string;
     observation: string;
     action?: DiscoveryAction;
     result: string;
     businessActionKey?: string;
+    module?: string;
+    flow?: "create" | "edit" | "browse";
+    executed?: boolean;
+    submitted?: boolean;
   }[];
   sources: {
     id: string;
