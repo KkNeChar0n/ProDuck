@@ -271,41 +271,6 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
               </button>
             </div>
           )}
-          {!!state.run.modules?.length && (
-            <section aria-label="模块探索进度">
-              <h3>模块探索与自动整理</h3>
-              <p className="muted">
-                每个模块结束后自动保存理解；有未覆盖项时保留阶段成果。以下内容尚未成为永久记忆。
-              </p>
-              {state.run.modules.map((module) => (
-                <details key={module.name}>
-                  <summary>
-                    {module.name} ·{" "}
-                    {
-                      {
-                        pending: "待探索",
-                        exploring: "体验中",
-                        summarizing: "正在自动整理",
-                        summarized: "已整理",
-                        partial: "阶段整理 · 有待验证项",
-                        failed: "整理失败 · 观察已保留",
-                      }[module.state]
-                    }
-                  </summary>
-                  {module.error && <p className="muted">{module.error}</p>}
-                  {module.markdown ? (
-                    <pre className="document-text">{module.markdown}</pre>
-                  ) : (
-                    <p className="muted">
-                      {module.state === "pending"
-                        ? "尚未访问，不计入已体验范围。"
-                        : "正在收集当前模块的页面与流程依据。"}
-                    </p>
-                  )}
-                </details>
-              ))}
-            </section>
-          )}
           <details>
             <summary>查看探索记录与未覆盖项</summary>
             {state.run.steps.map((s, i) => (

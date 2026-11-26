@@ -1227,3 +1227,12 @@ dialog::backdrop {
     grid-template-columns: 1fr;
   }
 }
+
+.discovery-feature {
+  margin: 10px 0;
+  padding: 12px;
+  background: var(--surface, #faf8ef);
+  border: 1px solid #ddd9c9;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}

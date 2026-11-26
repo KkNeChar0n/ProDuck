@@ -1,3 +1,4 @@
+import { verifiedFeature } from "./features.js";
 import { contextJson } from "./context.js";
 import type { DiscoveryRun, DiscoveryModule } from "../contracts/discovery.js";
 import { missingChecks } from "./coverage.js";
@@ -35,6 +36,7 @@ function inputFor(run: DiscoveryRun, name: string) {
   const signature = digest(
     JSON.stringify({
       steps,
+      features: run.features?.filter((f) => f.module === name),
       coverage,
       sources: run.sources.map((s) => s.sha256),
     }),
@@ -49,9 +51,15 @@ function partialMarkdown(run: DiscoveryRun, name: string) {
       (s) =>
         `- ${s.observation.slice(0, 250) || "页面已采集，尚未完成观察判断"}；${s.result.slice(0, 120)}`,
     )
-    .join(
-      "\n",
-    )}\n\n未覆盖：\n${coverage.map((c) => `- ${c.flow === "create" ? "新建" : "编辑"}：${c.limitation.slice(0, 200) || (missingChecks(c).length ? "尚有未验证项" : "清单已覆盖，其他分支仍需核对")}`).join("\n")}\n\n依据：${evidenceIds.slice(-12).join("、")}`;
+    .join("\n")}\n\n未覆盖：\n${
+    (run.features ?? [])
+      .filter((f) => f.module === name && !verifiedFeature(run, f))
+      .map(
+        (f) =>
+          `- ${f.name}：${f.remaining || f.blocker || "待验证"}；下一步：${f.nextAction}`,
+      )
+      .join("\n") || "实际功能清单尚待补充"
+  }\n\n依据：${evidenceIds.slice(-12).join("、")}`;
 }
 /** Cancellation/offline recovery keeps local observations without starting another model call. */
 export function preserveModuleProgress(run: DiscoveryRun) {
@@ -110,15 +118,18 @@ export async function summarizeModule(
       }));
     const payload = {
       name,
+      features: run.features?.filter((f) => f.module === name),
       omittedEvidence: Math.max(0, input.evidenceIds.length - 40),
       omittedSteps: Math.max(0, input.steps.length - 30),
       evidence,
-      coverage: input.coverage.map((c) => ({
-        ...c,
-        evidenceIds: c.evidenceIds.slice(-12),
-        detail: c.detail.slice(0, 500),
-        limitation: c.limitation.slice(0, 300),
-      })),
+      historicalCoverage: run.features?.length
+        ? []
+        : input.coverage.map((c) => ({
+            ...c,
+            evidenceIds: c.evidenceIds.slice(-12),
+            detail: c.detail.slice(0, 500),
+            limitation: c.limitation.slice(0, 300),
+          })),
       steps: input.steps.slice(-30).map((s) => ({
         captureId: s.captureId,
         observation: s.observation.slice(0, 300),
@@ -167,8 +178,10 @@ export async function summarizeModule(
     )
       throw new Error("模块整理缺少有效内容或当前模块依据");
     const incomplete =
-      !input.coverage.length ||
-      input.coverage.some((c) => missingChecks(c).length) ||
+      !run.features?.some((f) => f.module === name) ||
+      run.features?.some(
+        (f) => f.module === name && !verifiedFeature(run, f),
+      ) ||
       value.unknowns.length > 0;
     row.state = incomplete ? "partial" : "summarized";
     row.evidenceIds = [...new Set<string>(value.evidenceIds)];

@@ -1,6 +1,6 @@
 import type { DiscoveryRun } from "../../contracts/discovery";
 import { discoveryProgress } from "../../discovery/progress";
-import { checkNames } from "../../discovery/coverage";
+import { featureStates, verifiedFeature } from "../../discovery/features";
 export function DiscoveryProgress({ run }: { run: DiscoveryRun }) {
   const progress = discoveryProgress(run);
   return (
@@ -10,11 +10,13 @@ export function DiscoveryProgress({ run }: { run: DiscoveryRun }) {
           ? "探索进行中"
           : run.state === "paused"
             ? "探索已暂停 · 尚未完成"
-            : "本轮已整理 · 等待核对"}
+            : "阶段理解已更新 · 等待核对"}
       </h3>
       <div className="discovery-metrics">
         <div>
-          <strong>清单验证进度 {progress.percent}%</strong>
+          <strong>
+            已发现功能验证 {progress.total ? `${progress.percent}%` : "待梳理"}
+          </strong>
           <progress
             max={100}
             value={progress.percent}
@@ -37,14 +39,9 @@ export function DiscoveryProgress({ run }: { run: DiscoveryRun }) {
           </small>
         </div>
       </div>
-      <p>
-        当前模块：{run.activeModule || "正在识别"} · 已整理{" "}
-        {progress.modules.filter((m) => m.summaryPercent === 100).length}/
-        {progress.modules.length} 个模块
-      </p>
+      <p>当前模块：{run.activeModule || "正在识别"}</p>
       <p className="muted">
-        百分比按新建、编辑各5项检查计算，不代表整个产品已理解的比例。单项 0%
-        为未验证，100% 为已有验证依据；阶段理解已整理也可能有缺口。
+        进度仅为已验证项占已发现功能的比例；发现新功能时可能下降。部分验证和受阻不计完成，100%也不代表穷尽整个产品。阶段理解须审核后才成为永久记忆。
       </p>
       {progress.modules.map((module) => (
         <details
@@ -53,35 +50,97 @@ export function DiscoveryProgress({ run }: { run: DiscoveryRun }) {
           open={run.activeModule === module.name}
         >
           <summary>
-            {module.name} · 清单 {module.percent}%（{module.done}/{module.total}
-            ）· 整理 {module.summaryPercent}%
+            {module.name} ·{" "}
+            {module.total
+              ? `已发现功能 ${module.percent}%（${module.done}/${module.total}）`
+              : "功能清单待梳理"}{" "}
+            ·{" "}
+            {module.record?.state === "summarizing"
+              ? "正在整理"
+              : module.record?.markdown
+                ? "阶段理解已保存"
+                : "尚无阶段理解"}
           </summary>
-          <progress
-            max={100}
-            value={module.percent}
-            aria-label={`${module.name}清单进度`}
-          />
-          {module.flows.map((flow) => (
-            <div key={flow.flow}>
-              <strong>
-                {flow.flow === "create" ? "新建" : "编辑"} · {flow.percent}%（
-                {flow.done}/{flow.total}）
-              </strong>
-              <div className="discovery-check-grid">
-                {flow.checks.map((item) => (
-                  <span
-                    key={item.check}
-                    className={item.percent === 100 ? "verified" : ""}
-                  >
-                    {checkNames[item.check]} <b>{item.percent}%</b>
-                  </span>
-                ))}
-              </div>
-              {flow.limitation && (
-                <p className="muted">未完成原因：{flow.limitation}</p>
+          {module.total > 0 && (
+            <progress
+              max={100}
+              value={module.percent}
+              aria-label={`${module.name}功能进度`}
+            />
+          )}
+          {!module.total && (
+            <p className="muted">
+              此模块尚未按实际功能梳理。继续探索将结合历史观察与当前页面补建清单，旧通用检查项不计完成度。
+            </p>
+          )}
+          {module.features.map((item) => (
+            <details key={item.name} className="discovery-feature">
+              <summary>
+                {item.name} · {featureStates[item.state]} · 验证{" "}
+                {verifiedFeature(run, item) ? "100%" : "0%"}
+              </summary>
+              <p>
+                <b>验证目标：</b>
+                {item.goal}
+              </p>
+              <p>
+                <b>实际结果：</b>
+                {item.result || "尚无验证结果"}
+              </p>
+              <p>
+                <b>剩余内容：</b>
+                {item.remaining ||
+                  (verifiedFeature(run, item)
+                    ? "当前目标已验证，其他分支需另列功能项"
+                    : "尚待核对")}
+              </p>
+              {item.blocker && (
+                <p>
+                  <b>受阻条件：</b>
+                  {item.blocker}
+                </p>
               )}
-            </div>
+              <p>
+                <b>下一步：</b>
+                {item.nextAction || "当前目标已验证"}
+              </p>
+              <details>
+                <summary>
+                  查看依据（页面 {item.evidenceIds.length} · 资料{" "}
+                  {item.sourceIds.length}）
+                </summary>
+                {item.evidenceIds.map((id) => {
+                  const index = run.steps.findIndex((s) => s.captureId === id);
+                  const step = run.steps[index];
+                  return (
+                    <p key={id}>
+                      页面记录 {index >= 0 ? index + 1 : id}：
+                      {step?.observation || "页面已采集"}
+                      <br />
+                      {step?.result}
+                      <br />
+                      <small>{id}</small>
+                    </p>
+                  );
+                })}
+                {item.sourceIds.map((id) => (
+                  <p key={id}>
+                    交接资料：{run.sources.find((s) => s.id === id)?.name || id}
+                    （仅证明功能线索，不代表实际验证）
+                  </p>
+                ))}
+              </details>
+            </details>
           ))}
+          <details>
+            <summary>查看阶段理解</summary>
+            {module.record?.error && <p>{module.record.error}</p>}
+            {module.record?.markdown ? (
+              <pre className="document-text">{module.record.markdown}</pre>
+            ) : (
+              <p>尚未整理；已有观察会在模块结束后自动保存。</p>
+            )}
+          </details>
         </details>
       ))}
     </section>

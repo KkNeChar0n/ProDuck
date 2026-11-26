@@ -3,41 +3,66 @@ import assert from "node:assert/strict";
 import { discoveryProgress } from "../src/discovery/progress.js";
 import { contextJson } from "../src/discovery/context.js";
 import type { DiscoveryRun } from "../src/contracts/discovery.js";
-test("verification, summary and budget percentages are independent; skipped or unreferenced checks stay incomplete", () => {
+test("dynamic progress counts only evidenced complete goals, old templates never become percentages", () => {
   const run = {
     captureIds: ["a"],
+    sources: [],
+    steps: [],
     budget: 5,
-    roundStart: 0,
     modules: [
       {
         name: "客户",
         state: "partial",
-        signature: "s",
-        markdown: "",
+        markdown: "旧摘要",
         evidenceIds: ["a"],
       },
-      { name: "订单", state: "pending", markdown: "", evidenceIds: [] },
     ],
     coverage: [
       {
         module: "客户",
         flow: "create",
-        checks: ["entry", "fields", "validation", "cancel"],
+        checks: ["entry", "fields", "validation", "cancel", "save"],
         evidenceIds: ["a"],
-        limitation: "用户跳过保存",
         detail: "",
+        limitation: "仍有缺口",
       },
     ],
   } as DiscoveryRun;
-  const p = discoveryProgress(run);
-  assert.equal(p.percent, 20);
-  assert.equal(p.budgetPercent, 20);
-  assert.equal(p.modules[0].percent, 40);
-  assert.equal(p.modules[0].flows[0].percent, 80);
-  assert.equal(p.modules[0].flows[0].checks[4].percent, 0);
-  assert.equal(p.modules[0].summaryPercent, 100);
-  assert.equal(p.modules[1].summaryPercent, 0);
-  run.coverage![0].evidenceIds = ["invented"];
+  assert.equal(discoveryProgress(run).total, 0);
+  run.features = [
+    {
+      module: "客户",
+      name: "按名称筛选",
+      goal: "核对匹配列表",
+      state: "verified",
+      result: "匹配结果",
+      remaining: "",
+      blocker: "",
+      nextAction: "",
+      requiresWrite: false,
+      evidenceIds: ["a"],
+      sourceIds: [],
+    },
+    {
+      module: "客户",
+      name: "导入重复数据",
+      goal: "重复数据提示",
+      state: "blocked",
+      result: "",
+      remaining: "未导入",
+      blocker: "缺测试文件",
+      nextAction: "准备样本",
+      requiresWrite: true,
+      evidenceIds: ["a"],
+      sourceIds: [],
+    },
+  ];
+  assert.equal(discoveryProgress(run).percent, 50);
+  assert.equal(discoveryProgress(run).budgetPercent, 20);
+  run.features[0].remaining = "还有分支";
+  assert.equal(discoveryProgress(run).percent, 0);
+  run.features[0].remaining = "";
+  run.features[0].evidenceIds = ["invented"];
   assert.equal(discoveryProgress(run).percent, 0);
 });
 test("context budget preserves valid JSON, immutable evidence and original element indexes", () => {

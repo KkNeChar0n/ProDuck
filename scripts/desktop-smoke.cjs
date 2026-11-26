@@ -400,6 +400,44 @@ const wait = async (w, expression, timeoutMs = 10000) => {
           const target =
             next && page.elements.find((e) => e.label === next.label);
           content = JSON.stringify({
+            module: "客户模块",
+            featureName: next?.effect === "write" ? undefined : "填写客户名称",
+            features: [
+              {
+                module: "客户模块",
+                name: "填写客户名称",
+                goal: "核对字段可输入",
+                state: next ? "exploring" : "verified",
+                result: next ? "已发现名称输入框" : "已输入虚构客户名称",
+                remaining: next ? "尚未填写" : "",
+                blocker: "",
+                nextAction: next ? "填写名称并观察" : "",
+                requiresWrite: false,
+                evidenceIds: [
+                  data.messages[0].content
+                    .split("当前采集ID：")[1]
+                    .split("\n")[0],
+                ],
+                sourceIds: [],
+              },
+              {
+                module: "客户模块",
+                name: "导入重复客户",
+                goal: "验证重复数据提示",
+                state: "blocked",
+                result: "资料描述支持导入",
+                remaining: "未体验导入",
+                blocker: "缺少测试文件",
+                nextAction: "提供测试文件后导入",
+                requiresWrite: false,
+                evidenceIds: [
+                  data.messages[0].content
+                    .split("当前采集ID：")[1]
+                    .split("\n")[0],
+                ],
+                sourceIds: [],
+              },
+            ],
             observation: "客户模块提供列表、搜索与新增入口",
             action: next
               ? {
@@ -1491,7 +1529,7 @@ const wait = async (w, expression, timeoutMs = 10000) => {
     ),
   );
   await wc.executeJavaScript(
-    `{const section=document.querySelector('[aria-label="模块探索进度"]');section.querySelector('details').open=true;section.scrollIntoView({block:'start'});}`,
+    `{const section=document.querySelector('[aria-label="探索进度总览"]');section.querySelector('details').open=true;section.scrollIntoView({block:'start'});}`,
   );
   await wc.executeJavaScript(
     `new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`,
@@ -1504,11 +1542,11 @@ const wait = async (w, expression, timeoutMs = 10000) => {
     await wc.executeJavaScript(
       `document.querySelector('[aria-label="清单验证进度"]').value`,
     ),
-    0,
+    50,
   );
   assert(
     await wc.executeJavaScript(
-      `document.querySelector('[aria-label="探索进度总览"]').textContent.includes('0%')`,
+      `document.querySelector('[aria-label="探索进度总览"]').textContent.includes('50%')`,
     ),
   );
   await wc.executeJavaScript(
@@ -1520,6 +1558,13 @@ const wait = async (w, expression, timeoutMs = 10000) => {
   writeFileSync(
     "docs/verification/desktop-discovery-progress.png",
     (await wc.capturePage()).toPNG(),
+  );
+  assert.equal(draftUnderstanding.run.features.length, 2);
+  assert.equal(
+    await wc.executeJavaScript(
+      `document.querySelector('[aria-label="模块探索进度"]') === null`,
+    ),
+    true,
   );
   assert.equal(draftUnderstanding.activeReportId, null);
   assert.equal(browserConfirmations, 1);

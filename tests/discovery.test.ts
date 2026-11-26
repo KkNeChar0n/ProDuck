@@ -920,3 +920,81 @@ test("discovery recovers malformed model output in the same captured step", asyn
     db.close();
   }
 });
+
+test("actual feature backlog prevents early finish and continuation inherits discovered goals without altering old report", async () => {
+  const { db, projects, p } = fixture();
+  let calls = 0;
+  let service: DiscoveryService;
+  service = new DiscoveryService(
+    projects,
+    {
+      open: async () => {},
+      begin: async () => page.url,
+      observe: async () => ({ ...page, png: new Uint8Array([1]) }),
+      action: async () => {
+        assert.fail("finish is not a browser action");
+      },
+      manual: async () => {},
+      close: () => {},
+    },
+    async (_id, prompt) => {
+      if (prompt.startsWith("PRODUCK_DISCOVERY_MODULE"))
+        return moduleReply(prompt);
+      if (prompt.startsWith("PRODUCK_DISCOVERY_REPORT"))
+        return JSON.stringify(output(service.state(p.id).run!));
+      calls++;
+      if (calls > 1) assert(prompt.includes("核对列表字段"));
+      const id = service.state(p.id).run!.captureIds.at(-1)!;
+      return JSON.stringify({
+        module: "客户",
+        observation: "客户列表",
+        features: [
+          {
+            module: "客户",
+            name: "列表字段展示",
+            goal: "核对列表字段",
+            state: calls === 1 ? "pending" : "verified",
+            result: calls === 1 ? "发现列表" : "已核对名称与负责人列",
+            remaining: calls === 1 ? "未核对" : "",
+            blocker: "",
+            nextAction: calls === 1 ? "核对列表字段" : "",
+            requiresWrite: false,
+            evidenceIds: [id],
+            sourceIds: [],
+          },
+        ],
+        action: { kind: "finish", reason: "已观察" },
+      });
+    },
+  );
+  const settle = async () => {
+    for (
+      let i = 0;
+      i < 300 && service.state(p.id).run?.state === "running";
+      i++
+    )
+      await new Promise((r) => setTimeout(r, 10));
+  };
+  try {
+    const initial = await service.start(p.id, "理解", 6);
+    await settle();
+    const before = service.state(p.id);
+    assert.equal(before.run!.state, "draft");
+    assert.equal(calls, 2);
+    assert(before.run!.steps[0].result.includes("仍有 1 项可执行功能"));
+    assert.equal(before.run!.features![0].state, "verified");
+    const oldRun = JSON.stringify(before.run),
+      oldReport = JSON.stringify(before.reports[0]);
+    await service.continueExploration(p.id, initial.id, 4);
+    await settle();
+    assert.equal(service.state(p.id).run!.features!.length, 1);
+    assert.equal(JSON.stringify(service.memory.run(p.id, initial.id)), oldRun);
+    assert.equal(
+      JSON.stringify(service.memory.get(p.id, before.reports[0].id)),
+      oldReport,
+    );
+  } finally {
+    await service.close();
+    db.close();
+  }
+});

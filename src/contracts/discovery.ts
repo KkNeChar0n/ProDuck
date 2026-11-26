@@ -92,7 +92,21 @@ export interface DiscoveryModule {
   updatedAt?: string;
   error?: string;
 }
+export interface DiscoveryFeature {
+  module: string;
+  name: string;
+  goal: string;
+  state: "pending" | "exploring" | "partial" | "verified" | "blocked";
+  result: string;
+  remaining: string;
+  blocker: string;
+  nextAction: string;
+  requiresWrite: boolean;
+  evidenceIds: string[];
+  sourceIds: string[];
+}
 export interface DiscoveryRun {
+  features?: DiscoveryFeature[];
   stopReason?: string;
   retries?: { at: string; stage: string; attempt: number; error: string }[];
   modules?: DiscoveryModule[];
@@ -117,6 +131,7 @@ export interface DiscoveryRun {
     observation: string;
     action?: DiscoveryAction;
     result: string;
+    featureKey?: string;
     businessActionKey?: string;
     module?: string;
     flow?: "create" | "edit" | "browse";

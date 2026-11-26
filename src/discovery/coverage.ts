@@ -125,5 +125,4 @@ export function coverageMarkdown(run: DiscoveryRun) {
   );
 }
 
-export const depthInstructions = `默认深度体验：每个已识别业务模块都必须主动寻找新建和编辑，不需要用户特别点名。先梳理模块入口，再深入各模块：列表/筛选/详情、新建、编辑。对新建和编辑分别体验 entry（入口）、fields（字段、默认值/编辑回填、联动）、validation（原生约束或实际校验，明确区分）、cancel（修改后取消与结果）、save（确认提交后的结果）。编辑优先使用本轮新建的测试记录或用户指定测试记录；没有适合的数据则标明限制，不自行修改重要真实记录。删除不属于默认体验。用户拒绝提交时记录原因并继续其他流程，不绕过确认。
-返回 JSON 另外包含 module（稳定业务模块名，不把新增/编辑弹窗另当模块）、flow（下一动作所属 create/edit/browse）、coverage（对已观察清单的更新数组）。coverage 中 flow 只允许 create 或 edit，不要放入 browse；浏览流程写在 observation 中。每项格式：{"module":"模块名","flow":"create","checks":["entry","fields"],"evidenceIds":["真实采集ID"],"detail":"实际观察的字段与行为","limitation":"尚未覆盖的明确原因，没有阻碍时为空"}。checks 只能列出已观察项；save 只能在同流程业务提交已执行且后续页面证明结果后填写。更新时列出该流程累计已观察项；已知遗漏尚可继续时不能用笼统限制提前结束。找不到入口、权限不足、用户跳过或预算不足均保留未勾选项及原因，不能推断系统不支持该功能。结束前逐模块检查两类流程，不能只浏览列表便结束。`;
+export const depthInstructions = `深度体验默认包括真实存在的新建、编辑、查询和模块特有交互；不要强行为首页等模块创造新建编辑流程。字段、回填、校验、取消和保存结果作为具体功能的验证角度，不是每个模块固定十项。编辑优先使用本轮测试数据；无数据则记录条件。业务提交仍需确认，删除不属于默认体验。返回module为稳定业务模块名，flow为下一动作所属create/edit/browse。旧coverage字段可兼容但不作为动态功能进度。`;
