@@ -1,3 +1,4 @@
+import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { ChromeDiscoveryBrowser } from "../discovery/chrome.js";
 import { DiscoveryService, discoveryModel } from "../discovery/service.js";
@@ -21,6 +22,7 @@ import { atomicWrite } from "../projects/storage.js";
 import {
   app,
   dialog,
+  nativeImage,
   ipcMain,
   shell,
   type BrowserWindow,
@@ -82,24 +84,81 @@ export function registerWorkbenchIpc(
     "discovery:start",
     (e, id: string, goal: string, budget: number) => {
       trusted(e, id);
-      return discovery.start(id, goal, budget);
+      return discovery.start(id, goal, budget, "overview");
     },
   );
   ipcMain.handle(
     "discovery:continue",
     (e, id: string, runId: string, budget: number) => {
       trusted(e, id);
-      return discovery.continueExploration(id, runId, budget);
+      return discovery.continueExploration(id, runId, budget, "overview");
     },
   );
   ipcMain.handle("discovery:resume", (e, id: string, runId: string) => {
     trusted(e, id);
-    return discovery.resume(id, runId);
+    return discovery.resume(id, runId, false, 16, "overview");
   });
   ipcMain.handle("discovery:summarize", (e, id: string, runId: string) => {
     trusted(e, id);
-    return discovery.resume(id, runId, true);
+    return discovery.resume(id, runId, true, 16, "overview");
   });
+  ipcMain.handle(
+    "discovery:supplement",
+    async (
+      e,
+      id: string,
+      runId: string,
+      module: string,
+      description: string,
+    ) => {
+      trusted(e, id);
+      const selection = await dialog.showOpenDialog({
+        properties: ["openFile"],
+        filters: [{ name: "页面截图", extensions: ["png", "jpg", "jpeg"] }],
+      });
+      if (selection.canceled || !selection.filePaths[0]) return null;
+      const path = selection.filePaths[0];
+      if (statSync(path).size > 20 * 1024 * 1024)
+        throw new Error("截图不能超过20MB");
+      let img = nativeImage.createFromBuffer(readFileSync(path));
+      if (img.isEmpty()) throw new Error("请选择有效的PNG或JPEG截图");
+      const size = img.getSize();
+      if (Math.max(size.width, size.height) > 2400)
+        img = img.resize(
+          size.width >= size.height ? { width: 2400 } : { height: 2400 },
+        );
+      return discovery.supplement(id, runId, module, description, img.toPNG());
+    },
+  );
+  ipcMain.handle(
+    "discovery:export-page",
+    async (e, id: string, captureId: string) => {
+      trusted(e, id);
+      const capture = getCapture(projects.shared(id).workspace, captureId);
+      const html = !!capture.html;
+      const choice = await dialog.showSaveDialog({
+        defaultPath: html ? "页面快照.html" : "页面截图.png",
+        filters: [
+          {
+            name: html ? "静态HTML" : "截图",
+            extensions: [html ? "html" : "png"],
+          },
+        ],
+      });
+      if (!choice.canceled && choice.filePath)
+        atomicWrite(
+          choice.filePath,
+          html
+            ? capture.html!
+            : readFileSync(
+                projectPath(
+                  projects.shared(id).workspace,
+                  capture.screenshotPath,
+                ),
+              ),
+        );
+    },
+  );
   ipcMain.handle("discovery:cancel", (e, id: string) => {
     trusted(e, id);
     return discovery.cancel(id);

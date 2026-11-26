@@ -20,6 +20,7 @@ export function prototypePrompt(
     title: string;
     text: string;
     structure: string;
+    html?: string;
     actions: string[];
   },
   change?: string,
@@ -35,6 +36,7 @@ export function prototypePrompt(
       title: capture.title,
       text: capture.text.slice(0, baseline ? 1500 : 6000),
       structure: capture.structure.slice(0, baseline ? 3000 : 20000),
+      html: capture.html?.slice(0, baseline ? 1000 : 6000),
       actions: capture.actions,
     }) +
     (edit
@@ -173,17 +175,23 @@ export class PrototypeGenerator {
     const evidence = sourceIds.map((id) =>
       getCapture(this.projects.shared(projectId).workspace, id),
     );
+    const representative = new Map<string, (typeof evidence)[number]>();
+    for (const c of evidence)
+      representative.set(c.manualScreenshot ? c.id : c.url + "|" + c.title, c);
+    const contextPages = [...representative.values()].slice(-24);
     const context = report
       ? JSON.stringify({
           markdown: report.markdown.slice(0, baseline ? 4000 : 14000),
-          pages: evidence.map((c) => ({
+          pages: contextPages.map((c) => ({
             id: c.id,
             title: c.title,
             url: c.url,
-            text: c.text.slice(0, Math.floor(3000 / evidence.length)),
+            html: c.html?.slice(0, Math.floor(12000 / contextPages.length)),
+            captureNotes: c.captureNotes,
+            text: c.text.slice(0, Math.floor(3000 / contextPages.length)),
             structure: c.structure.slice(
               0,
-              Math.floor((baseline ? 2000 : 10000) / evidence.length),
+              Math.floor((baseline ? 2000 : 10000) / contextPages.length),
             ),
           })),
         })
@@ -249,6 +257,27 @@ export class PrototypeGenerator {
         controller.signal,
       );
       input.maxTokens = 8192;
+      const screenshots = evidence.filter((c) => c.manualScreenshot).slice(-6);
+      if (screenshots.length) {
+        if (this.models.capabilities(projectId)?.image !== "supported")
+          throw new Error(
+            "已补充截图，但项目模型尚未通过图像能力检测。请先在项目模型设置测试图像能力，再生成原型。",
+          );
+        input.images = screenshots.map((c) => ({
+          mediaType: "image/png" as const,
+          base64: readFileSync(
+            projectPath(
+              this.projects.shared(projectId).workspace,
+              c.screenshotPath,
+            ),
+          ).toString("base64"),
+        }));
+        input.prompt += `\n附图按顺序对应：${screenshots.map((c) => `${c.id} ${c.title}：${c.text.slice(0, 200)}`).join("；")}。以截图补充DOM缺失部分，使用模拟数据重建可操作界面，不将截图本身当成已实现的交互。`;
+        note(
+          "running",
+          `正在结合页面HTML和 ${screenshots.length} 张补充截图生成原型`,
+        );
+      }
       let lastUpdate = 0;
       for await (const chunk of streamModel(input)) {
         output += chunk;
@@ -271,6 +300,8 @@ export class PrototypeGenerator {
             captureId: c.id,
             title: c.title,
             url: c.url,
+            html: c.html?.slice(0, Math.floor(12000 / contextPages.length)),
+            captureNotes: c.captureNotes,
             capturedAt: c.capturedAt,
             scope: report
               ? "依据已审核产品理解与此采集状态，未观察分支仍属模拟假设"

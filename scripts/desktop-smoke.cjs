@@ -385,22 +385,15 @@ const wait = async (w, expression, timeoutMs = 10000) => {
             data.messages[0].content.split("页面证据：")[1],
           );
           const actions = [
-            { label: "新增客户", kind: "click", effect: "read" },
-            { label: "保存", kind: "click", effect: "write" },
-            {
-              label: "客户名称",
-              kind: "fill",
-              value: "虚构客户",
-              effect: "read",
-            },
-            { label: "负责人", kind: "fill", value: "测试人", effect: "read" },
-            { label: "保存", kind: "click", effect: "write" },
+            { kind: "scroll", direction: "down", effect: "read" },
+            { kind: "scroll", direction: "up", effect: "read" },
           ];
           const next = actions[discoveryCalls - 1];
           const target =
             next && page.elements.find((e) => e.label === next.label);
           content = JSON.stringify({
             module: "客户模块",
+            modulePurpose: "管理客户名单和负责人，供销售查阅",
             featureName: next?.effect === "write" ? undefined : "填写客户名称",
             features: [
               {
@@ -442,11 +435,12 @@ const wait = async (w, expression, timeoutMs = 10000) => {
             action: next
               ? {
                   kind: next.kind,
-                  index: target.index,
+                  index: target?.index,
+                  direction: next.direction,
                   effect: next.effect,
                   ...(next.value ? { value: next.value } : {}),
                 }
-              : { kind: "finish", reason: "已体验新增弹窗与校验" },
+              : { kind: "finish", reason: "已了解客户模块用途并采集列表页面" },
           });
         } else if (
           data.messages[0].content.startsWith("PRODUCK_DISCOVERY_REPORT")
@@ -1502,7 +1496,7 @@ const wait = async (w, expression, timeoutMs = 10000) => {
   assert(pausedDiscovery.run.message.includes("自动重试 3 次后仍失败"));
   assert(pausedDiscovery.run.modules.some((m) => m.markdown));
   await wc.executeJavaScript(
-    `{const e=document.querySelector('[aria-label="探索步数"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,'60');e.dispatchEvent(new Event('input',{bubbles:true}));}`,
+    `{const e=document.querySelector('[aria-label="探索步数"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,'20');e.dispatchEvent(new Event('input',{bubbles:true}));}`,
   );
   await wc.executeJavaScript(
     `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='继续探索').click()`,
@@ -1517,7 +1511,7 @@ const wait = async (w, expression, timeoutMs = 10000) => {
   );
   assert.equal(
     draftUnderstanding.run.budget - pausedDiscovery.run.captureIds.length,
-    60,
+    20,
   );
   assert.equal(
     draftUnderstanding.run.roundStart,
@@ -1540,13 +1534,13 @@ const wait = async (w, expression, timeoutMs = 10000) => {
   );
   assert.equal(
     await wc.executeJavaScript(
-      `document.querySelector('[aria-label="清单验证进度"]').value`,
+      `document.querySelector('[aria-label="清单验证进度"]') === null`,
     ),
-    50,
+    true,
   );
   assert(
     await wc.executeJavaScript(
-      `document.querySelector('[aria-label="探索进度总览"]').textContent.includes('50%')`,
+      `document.querySelector('[aria-label="探索进度总览"]').textContent.includes('已有页面资料')`,
     ),
   );
   await wc.executeJavaScript(
@@ -1559,7 +1553,8 @@ const wait = async (w, expression, timeoutMs = 10000) => {
     "docs/verification/desktop-discovery-progress.png",
     (await wc.capturePage()).toPNG(),
   );
-  assert.equal(draftUnderstanding.run.features.length, 2);
+  assert.equal(draftUnderstanding.run.mode, "overview");
+  assert.equal(draftUnderstanding.run.features?.length ?? 0, 0);
   assert.equal(
     await wc.executeJavaScript(
       `document.querySelector('[aria-label="模块探索进度"]') === null`,
@@ -1567,7 +1562,7 @@ const wait = async (w, expression, timeoutMs = 10000) => {
     true,
   );
   assert.equal(draftUnderstanding.activeReportId, null);
-  assert.equal(browserConfirmations, 1);
+  assert.equal(browserConfirmations, 0);
   assert(draftUnderstanding.reports[0].markdown.includes("客户模块"));
   await wc.executeJavaScript(
     `{const e=document.querySelector('[aria-label="模块理解 Markdown"]');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(e,e.value+${JSON.stringify("\n人工核对：客户模块需保留搜索。")});e.dispatchEvent(new Event('input',{bubbles:true}));}`,
@@ -1674,6 +1669,41 @@ const wait = async (w, expression, timeoutMs = 10000) => {
     `document.querySelector('[aria-label="发送修改要求"]').click()`,
   );
   await wait(window, `document.body.innerText.includes('已使用审核记忆回答')`);
+  const screenshotFile = join(root, "manual-page.png");
+  writeFileSync(screenshotFile, (await wc.capturePage()).toPNG());
+  dialog.showOpenDialog = async () => ({
+    canceled: false,
+    filePaths: [screenshotFile],
+  });
+  const beforeSupplement = await wc.executeJavaScript(
+    `window.produck.discovery.state(${JSON.stringify(firstRelease.id)})`,
+  );
+  const supplement = await wc.executeJavaScript(
+    `window.produck.discovery.supplement(${JSON.stringify(firstRelease.id)},${JSON.stringify(beforeSupplement.run.id)},${JSON.stringify(beforeSupplement.run.modules[0].name)},"手动画布布局参考")`,
+  );
+  assert.notEqual(supplement.reportId, beforeSupplement.run.reportId);
+  const afterSupplement = await wc.executeJavaScript(
+    `window.produck.discovery.state(${JSON.stringify(firstRelease.id)})`,
+  );
+  assert.equal(afterSupplement.activeReportId, beforeSupplement.activeReportId);
+  assert.equal(
+    afterSupplement.reports.find((r) => r.id === supplement.reportId)
+      .approvedAt,
+    undefined,
+  );
+  const exportedPage = join(root, "page.html");
+  dialog.showSaveDialog = async () => ({
+    canceled: false,
+    filePath: exportedPage,
+  });
+  await wc.executeJavaScript(
+    `window.produck.discovery.exportPage(${JSON.stringify(firstRelease.id)},${JSON.stringify(beforeSupplement.run.captureIds[0])})`,
+  );
+  assert(
+    require("node:fs")
+      .readFileSync(exportedPage, "utf8")
+      .includes("Content-Security-Policy"),
+  );
   assert.equal(await wc.executeJavaScript("typeof require"), "undefined");
   assert.equal(errors.length, 0, errors.join("\n"));
   console.log(

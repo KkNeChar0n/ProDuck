@@ -998,3 +998,98 @@ test("actual feature backlog prevents early finish and continuation inherits dis
     db.close();
   }
 });
+
+test("overview blocks form actions and finishes without deep coverage; screenshot creates a new review", async () => {
+  const { db, projects, p } = fixture();
+  let actions = 0,
+    calls = 0;
+  let service: DiscoveryService;
+  service = new DiscoveryService(
+    projects,
+    {
+      open: async () => {},
+      begin: async () => page.url,
+      observe: async () => ({
+        ...page,
+        html: "<!doctype html><html><body>客户</body></html>",
+        captureNotes: ["画布请补图"],
+        png: new Uint8Array([1]),
+      }),
+      action: async () => {
+        actions++;
+      },
+      manual: async () => {},
+      close: () => {},
+    },
+    async (_id, prompt) => {
+      if (prompt.startsWith("PRODUCK_DISCOVERY_MODULE"))
+        return moduleReply(prompt);
+      if (prompt.startsWith("PRODUCK_DISCOVERY_REPORT"))
+        return JSON.stringify(output(service.state(p.id).run!));
+      assert(prompt.includes("不是功能验收"));
+      calls++;
+      return JSON.stringify({
+        module: "客户",
+        modulePurpose: "管理客户关系",
+        observation: "已看到列表",
+        captureNotes: [],
+        action:
+          calls === 1
+            ? { kind: "fill", index: 2, value: "test", effect: "read" }
+            : { kind: "finish", reason: "已了解用途，画布需截图" },
+      });
+    },
+  );
+  const settle = async () => {
+    for (
+      let i = 0;
+      i < 300 && service.state(p.id).run?.state === "running";
+      i++
+    )
+      await new Promise((r) => setTimeout(r, 10));
+  };
+  try {
+    await service.start(p.id, "了解系统", 16, "overview");
+    await settle();
+    const state = service.state(p.id);
+    assert.equal(state.run!.state, "draft");
+    assert.equal(actions, 0);
+    assert.equal(calls, 2);
+    assert.equal(state.run!.finishCorrections, 0);
+    assert(state.run!.steps[0].result.includes("轻量采集不执行"));
+    assert.equal(state.run!.modules![0].purpose, "管理客户关系");
+    const report = state.reports[0];
+    service.memory.approve(p.id, report.id, report.digest);
+    const original = JSON.stringify(service.memory.run(p.id, state.run!.id));
+    const supplement = service.supplement(
+      p.id,
+      state.run!.id,
+      "客户",
+      "画布布局",
+      new Uint8Array([1, 2]),
+    );
+    assert.equal(supplement.state, "draft");
+    assert.notEqual(supplement.reportId, report.id);
+    assert.equal(service.memory.active(p.id)!.id, report.id);
+    assert.equal(
+      service.memory.get(p.id, supplement.reportId!).approvedAt,
+      undefined,
+    );
+    assert.equal(
+      JSON.stringify(service.memory.run(p.id, state.run!.id)),
+      original,
+    );
+    assert.throws(() =>
+      service.supplement(
+        p.id,
+        supplement.id,
+        "不存在",
+        "说明",
+        new Uint8Array([1]),
+      ),
+    );
+  } finally {
+    await service.close();
+    db.close();
+  }
+});

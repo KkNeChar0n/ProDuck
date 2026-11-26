@@ -1,4 +1,8 @@
 export interface Capture {
+  html?: string;
+  htmlPath?: string;
+  captureNotes?: string[];
+  manualScreenshot?: boolean;
   memoryEligible?: boolean;
   id: string;
   title: string;

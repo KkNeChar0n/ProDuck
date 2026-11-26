@@ -19,8 +19,11 @@ export function saveCapture(
       id,
       relativePath: `sources/${id}.json`,
       screenshotPath: `sources/${id}.png`,
+      ...(value.html ? { htmlPath: `sources/${id}.html` } : {}),
     };
   atomicWrite(projectPath(workspace, record.screenshotPath), png);
+  if (value.html)
+    atomicWrite(projectPath(workspace, `sources/${id}.html`), value.html);
   atomicWrite(
     projectPath(workspace, record.relativePath),
     JSON.stringify(record, null, 2),

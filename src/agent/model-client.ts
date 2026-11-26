@@ -9,6 +9,7 @@ export interface ModelRequest {
   signal?: AbortSignal;
   maxTokens?: number;
   image?: { mediaType: "image/png"; base64: string };
+  images?: { mediaType: "image/png"; base64: string }[];
   probeTool?: boolean;
 }
 export function validateEndpoint(input: string): string {
@@ -26,6 +27,7 @@ export function validateEndpoint(input: string): string {
   return url.href.replace(/\/$/, "");
 }
 function requestBody(input: ModelRequest, stream: boolean) {
+  const images = input.images ?? (input.image ? [input.image] : []);
   return input.provider === "anthropic"
     ? {
         model: input.model,
@@ -34,16 +36,16 @@ function requestBody(input: ModelRequest, stream: boolean) {
         messages: [
           {
             role: "user",
-            content: input.image
+            content: images.length
               ? [
-                  {
+                  ...images.map((image) => ({
                     type: "image",
                     source: {
                       type: "base64",
-                      media_type: input.image.mediaType,
-                      data: input.image.base64,
+                      media_type: image.mediaType,
+                      data: image.base64,
                     },
-                  },
+                  })),
                   { type: "text", text: input.prompt },
                 ]
               : input.prompt,
@@ -75,14 +77,14 @@ function requestBody(input: ModelRequest, stream: boolean) {
         messages: [
           {
             role: "user",
-            content: input.image
+            content: images.length
               ? [
-                  {
+                  ...images.map((image) => ({
                     type: "image_url",
                     image_url: {
-                      url: `data:${input.image.mediaType};base64,${input.image.base64}`,
+                      url: `data:${image.mediaType};base64,${image.base64}`,
                     },
-                  },
+                  })),
                   { type: "text", text: input.prompt },
                 ]
               : input.prompt,

@@ -31,6 +31,8 @@ export interface DiscoveryElement {
   skipsValidation?: boolean;
 }
 export interface DiscoveryPage {
+  html?: string;
+  captureNotes?: string[];
   title: string;
   url: string;
   text: string;
@@ -78,6 +80,9 @@ export interface DiscoveryCoverage {
   limitation: string;
 }
 export interface DiscoveryModule {
+  purpose?: string;
+  representativeIds?: string[];
+  captureNotes?: string[];
   name: string;
   state:
     | "pending"
@@ -106,6 +111,7 @@ export interface DiscoveryFeature {
   sourceIds: string[];
 }
 export interface DiscoveryRun {
+  mode?: "overview";
   features?: DiscoveryFeature[];
   stopReason?: string;
   retries?: { at: string; stage: string; attempt: number; error: string }[];
@@ -163,6 +169,13 @@ export interface DiscoveryState {
   activeReportId: string | null;
 }
 export interface DiscoveryBridge {
+  supplement(
+    id: string,
+    runId: string,
+    module: string,
+    description: string,
+  ): Promise<DiscoveryRun | null>;
+  exportPage(id: string, captureId: string): Promise<void>;
   open(id: string, url: string): Promise<void>;
   state(id: string): Promise<DiscoveryState>;
   start(id: string, goal: string, budget: number): Promise<DiscoveryRun>;

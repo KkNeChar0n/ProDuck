@@ -1,8 +1,10 @@
-import { DiscoveryProgress } from "./DiscoveryProgress";
+import { OverviewProgress } from "./OverviewProgress";
 import { useEffect, useRef, useState } from "react";
 import type { DiscoveryState } from "../../contracts/discovery";
 import { desktop, errorText } from "../bridge";
 export function ProductDiscovery({ projectId }: { projectId: string }) {
+  const [screenshotModule, setScreenshotModule] = useState("");
+  const [screenshotDescription, setScreenshotDescription] = useState("");
   const reviewRef = useRef<HTMLElement>(null);
   const restoredBudget = useRef(false);
   const [state, setState] = useState<DiscoveryState>({
@@ -12,14 +14,19 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
   });
   const [url, setUrl] = useState(""),
     [goal, setGoal] = useState(""),
-    [budget, setBudget] = useState(40);
+    [budget, setBudget] = useState(16);
   useEffect(() => {
     if (state.run && !restoredBudget.current) {
       restoredBudget.current = true;
       setBudget(
         Math.max(
           2,
-          Math.min(120, state.run.budget - (state.run.roundStart ?? 0)),
+          Math.min(
+            30,
+            state.run.mode === "overview"
+              ? state.run.budget - (state.run.roundStart ?? 0)
+              : 16,
+          ),
         ),
       );
     }
@@ -89,11 +96,13 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
     <article className="paper discovery">
       <h2>让 Agent 理解产品</h2>
       <p className="muted">
-        打开独立 Chrome → 登录 → 自动体验 → 审核模块理解 → 长期记忆与可修改原型
+        打开独立 Chrome → 登录 → 了解模块并采集页面 → 补图与审核 → 绘制原型 /
+        写文档
       </p>
       <p>
         每个项目保留独立登录状态。可先在「交接资料」导入已有文档，Agent
-        会先识别模块，逐个深入体验；每个模块结束后自动整理，再继续下一个模块。默认包含新建和编辑，以及字段、校验、取消与保存结果。
+        会了解系统用途和模块主要职责，采集代表页面的静态
+        HTML、样式与截图。无需测试新建、编辑、校验或保存流程；采集不完整时可手动补图。
       </p>
       <form
         className="url-form"
@@ -124,7 +133,7 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
           maxLength={2000}
           value={goal}
           onChange={(e) => setGoal(e.target.value)}
-          placeholder="如：优先体验客户与订单模块，检查新建、编辑、字段联动和状态变化"
+          placeholder="如：了解客户与订单模块的用途，采集列表、详情和主要操作弹窗"
           disabled={busy || running}
         />
       </label>
@@ -136,7 +145,7 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
             aria-describedby="discovery-budget-help"
             type="number"
             min={2}
-            max={120}
+            max={30}
             value={budget}
             onChange={(e) => setBudget(Number(e.target.value))}
             disabled={busy || running}
@@ -166,18 +175,11 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
         )}
       </div>
       <p className="muted" id="discovery-budget-help">
-        默认 40 步，常规包含新建与编辑。单模块可选 20–40 步，多个模块可选 60–120
-        步。
-        一步是观察一次页面状态并决定下一步操作；弹窗和筛选结果也可能各占一步，不等于模块数量。
-        步数越多通常耗时和模型用量越高，Agent
-        也可能提前结束。模块完成或切换时会自动整理；达到上限或暂停时保留阶段成果，不代表已完整理解产品。「继续探索」使用上方步数追加新一轮预算，无需先手动整理；「重新探索」从头建立新清单。
+        默认最多16个页面状态，可选2–30；每模块通常只看1个代表页面，必要时补1个关键弹窗。主要模块信息足够后即可整理并生成原型，不必跑满步数。继续探索只补充缺失页面，历史记录会复用。
       </p>
       <p className="muted">
-        授权后，Agent
-        将自行点击、输入、展开菜单并体验当前站点，普通操作失败会重新观察或换路。涉及业务数据修改时会单次确认，确认后仍由
         Agent
-        执行。页面文字、元素和交接资料将发送给项目模型；图像能力已检测通过时，拖拽和画布页面会附加截图。Chrome
-        中手动登录即可，无需配置调试端口。
+        仅浏览导航、展开菜单和采集页面，不主动填写表单或提交业务操作。静态HTML不包含原站脚本、服务端逻辑和登录凭证；画布、嵌入区域及外部图片可能需要截图补充。页面资料会发送给项目模型，补图生成原型需要支持图像的模型。
       </p>
       {notice && <p role="status">{notice}</p>}
       {error && (
@@ -187,7 +189,12 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
       )}
       {state.run && (
         <section className="notice">
-          <DiscoveryProgress run={state.run} />
+          <OverviewProgress
+            run={state.run}
+            exportPage={(id) =>
+              void act(() => desktop().discovery.exportPage(projectId, id))
+            }
+          />
           <p role="status">
             <strong>{state.run.message}</strong>
             {state.run.stopReason && (
@@ -249,7 +256,7 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
                 继续探索
               </button>
               <p className="muted">
-                沿用已有依据与覆盖清单，优先补齐未完成项；新增步数使用上方设置（当前{" "}
+                复用已有理解和页面资料，只补充缺失模块或代表页面；新增步数使用上方设置（当前{" "}
                 {budget} 步）。Chrome 关闭后请先重新打开。
                 {dirty
                   ? "请先保存当前草稿修改。"
@@ -271,6 +278,59 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
               </button>
             </div>
           )}
+          <section aria-label="补充页面截图">
+            <h3>HTML 不完整？补充页面截图</h3>
+            <select
+              aria-label="截图所属模块"
+              value={screenshotModule}
+              onChange={(e) => setScreenshotModule(e.target.value)}
+              disabled={busy || running}
+            >
+              <option value="">选择截图所属模块</option>
+              {state.run.modules?.map((m) => (
+                <option key={m.name} value={m.name}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+            <input
+              aria-label="截图内容说明"
+              placeholder="如：编排画布的节点与连线布局"
+              value={screenshotDescription}
+              maxLength={1000}
+              onChange={(e) => setScreenshotDescription(e.target.value)}
+              disabled={busy || running}
+            />
+            <button
+              disabled={
+                busy ||
+                running ||
+                !screenshotModule ||
+                !screenshotDescription.trim()
+              }
+              onClick={() =>
+                void act(async () => {
+                  const result = await desktop().discovery.supplement(
+                    projectId,
+                    state.run!.id,
+                    screenshotModule,
+                    screenshotDescription,
+                  );
+                  if (result) {
+                    setScreenshotDescription("");
+                    setNotice(
+                      "截图已关联到模块。请审核新草稿后生成原型，旧批准记录保留。",
+                    );
+                  }
+                })
+              }
+            >
+              选择 PNG / JPEG 截图
+            </button>
+            <p className="muted">
+              每张不超过20MB；补图后需重新审核。生成时最多使用最近6张补图，请优先提供关键页面。
+            </p>
+          </section>
           <details>
             <summary>查看探索记录与未覆盖项</summary>
             {state.run.steps.map((s, i) => (

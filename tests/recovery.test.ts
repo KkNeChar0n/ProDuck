@@ -101,3 +101,75 @@ test("restart records interruption; explicit retry keeps original inputs and can
   generator.close();
   db.close();
 });
+
+test("prototype generation consumes manual screenshot bytes and blocks silently ignoring unsupported vision", async () => {
+  const root = mkdtempSync(join(tmpdir(), "produck-manual-")),
+    db = openProjectDatabase(join(root, "db"));
+  const projects = new ProjectRepository(db, join(root, "state")),
+    p = projects.create("A", root),
+    versions = new PrototypeRepository(db, projects);
+  const capture = saveCapture(
+    p.workspace,
+    {
+      title: "画布",
+      url: "https://example.com",
+      capturedAt: new Date().toISOString(),
+      text: "用户补充布局",
+      structure: "[]",
+      html: "<html><body>代表页面</body></html>",
+      actions: [],
+      manualScreenshot: true,
+    },
+    new Uint8Array([1, 2, 3]),
+    false,
+  );
+  let supported = true,
+    calls = 0;
+  const models = {
+    capabilities: () => ({ image: supported ? "supported" : "unsupported" }),
+    request: async (_id: string, prompt: string) => ({
+      provider: "openai-compatible",
+      endpoint: "https://example.com/v1",
+      model: "test",
+      token: "synthetic",
+      prompt,
+    }),
+  } as unknown as ModelService;
+  const generator = new PrototypeGenerator(db, projects, models, versions),
+    original = globalThis.fetch;
+  globalThis.fetch = async (_url, init) => {
+    calls++;
+    const content = JSON.parse(String(init?.body)).messages[0].content;
+    assert.equal(content[0].image_url.url, "data:image/png;base64,AQID");
+    assert(content[1].text.includes(capture.id));
+    assert(content[1].text.includes("代表页面"));
+    return new Response(
+      "data: " +
+        JSON.stringify({
+          choices: [
+            {
+              delta: {
+                content:
+                  "<!doctype html><html><body><h1>画布原型</h1></body></html>",
+              },
+            },
+          ],
+        }) +
+        "\n\ndata: [DONE]\n\n",
+    );
+  };
+  try {
+    await generator.generate(p.id, capture.id, () => {});
+    assert.equal(calls, 1);
+    supported = false;
+    await assert.rejects(
+      generator.generate(p.id, capture.id, () => {}),
+      /图像能力/,
+    );
+    assert.equal(calls, 1);
+  } finally {
+    globalThis.fetch = original;
+    generator.close();
+    db.close();
+  }
+});

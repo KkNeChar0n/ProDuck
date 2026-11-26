@@ -1,3 +1,4 @@
+import { snapshotExpression } from "./snapshot.js";
 import { performDrag, type DragData } from "./drag.js";
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -43,7 +44,7 @@ const inspect = `(() => {
   };
   const elements = all.map((e,index) => ({index, key:path(e), box:box(e), draggable:!!e.draggable, dragHint:!!e.draggable || ["grab","grabbing","move"].includes(getComputedStyle(e).cursor), tag:e.tagName, role:e.getAttribute('role') || '', type:e.type || '', inForm:!!e.form, submitsForm:!!e.form && ['BUTTON','INPUT'].includes(e.tagName) && e.type==='submit', label:label(e), ...(e.form ? {form:formInfo(e.form),skipsValidation:!!e.formNoValidate}:{}), ...(['INPUT','TEXTAREA','SELECT'].includes(e.tagName)?{value:String(e.value).slice(0,2000),checked:!!e.checked,required:!!e.required,valid:!e.willValidate || e.validity.valid,validationMessage:e.validationMessage?.slice(0,300)||''}:{}), ...(e.tagName === 'A' && e.href ? {href:e.href} : {}), ...(e.tagName === 'SELECT' ? {options:[...e.options].map(o=>o.value).slice(0,80)} : {})}));
   const structure = JSON.stringify([...document.body.querySelectorAll('*')].filter(visible).slice(0,350).map(e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect();return {tag:e.tagName, text:e.children.length?undefined:e.textContent?.slice(0,120), role:e.getAttribute('role'), box:{x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)}, style:{color:s.color,background:s.backgroundColor,font:s.font,padding:s.padding,display:s.display,border:s.border}, checked:e.checked, selected:e.tagName==='SELECT'?e.selectedIndex:undefined};}));
-  return {title:document.title.slice(0,300),url:location.href,text:document.body.innerText.slice(0,14000),structure:structure.slice(0,45000),elements};
+  return {...${snapshotExpression},title:document.title.slice(0,300),url:location.href,text:document.body.innerText.slice(0,14000),structure:structure.slice(0,45000),elements};
 })()`;
 interface Session {
   pipe: CdpPipe;

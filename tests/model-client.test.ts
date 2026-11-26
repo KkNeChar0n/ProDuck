@@ -232,3 +232,43 @@ test("reasoning effort is sent only when explicitly selected on compatible reque
     }) as typeof fetch);
   }
 });
+
+test("manual reference screenshots are serialized for both model providers in order", async () => {
+  for (const provider of ["openai-compatible", "anthropic"] as const) {
+    const fetcher: typeof fetch = async (_url, init) => {
+      const content = JSON.parse(String(init?.body)).messages[0].content;
+      assert.equal(content.length, 3);
+      assert.equal(
+        provider === "anthropic"
+          ? content[0].source.data
+          : content[0].image_url.url,
+        "openai-compatible" === provider
+          ? "data:image/png;base64,first"
+          : "first",
+      );
+      assert.equal(
+        provider === "anthropic"
+          ? content[1].source.data
+          : content[1].image_url.url,
+        "openai-compatible" === provider
+          ? "data:image/png;base64,second"
+          : "second",
+      );
+      return provider === "anthropic"
+        ? sse(['data: {"type":"message_stop"}\n\n'])
+        : sse(["data: [DONE]\n\n"]);
+    };
+    for await (const _ of streamModel(
+      {
+        ...input,
+        provider,
+        images: [
+          { mediaType: "image/png", base64: "first" },
+          { mediaType: "image/png", base64: "second" },
+        ],
+      },
+      fetcher,
+    )) {
+    }
+  }
+});

@@ -3,6 +3,21 @@ contextBridge.exposeInMainWorld(
   "produck",
   Object.freeze({
     discovery: {
+      supplement: (
+        id: string,
+        runId: string,
+        module: string,
+        description: string,
+      ) =>
+        ipcRenderer.invoke(
+          "discovery:supplement",
+          id,
+          runId,
+          module,
+          description,
+        ),
+      exportPage: (id: string, captureId: string) =>
+        ipcRenderer.invoke("discovery:export-page", id, captureId),
       open: (id: string, url: string) =>
         ipcRenderer.invoke("discovery:open", id, url),
       state: (id: string) => ipcRenderer.invoke("discovery:state", id),
