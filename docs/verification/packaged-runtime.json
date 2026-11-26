@@ -1,7 +1,7 @@
 {
-  "version": "0.1.30",
-  "checkedAt": "2026-11-26T08:17:24.354Z",
-  "filesVerified": 1980,
+  "version": "0.1.31",
+  "checkedAt": "2026-11-26T09:00:23.544Z",
+  "filesVerified": 1984,
   "versions": {
     "electron": "45.3.3",
     "parse5": "8.0.0",

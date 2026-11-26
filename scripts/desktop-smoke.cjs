@@ -17,6 +17,7 @@ let server,
   platformCredentialRef,
   yunxiaoCredentialRef,
   discoveryCalls = 0,
+  screenshotPrototypeRequests = 0,
   discoveryFailures = 0,
   browserConfirmations = 0,
   plannerCalls = 0,
@@ -345,6 +346,17 @@ const wait = async (w, expression, timeoutMs = 10000) => {
         return;
       }
       const data = JSON.parse(body);
+      if (Array.isArray(data.messages?.[0]?.content)) {
+        const parts = data.messages[0].content;
+        data.messages[0].content =
+          parts.find((p) => p.type === "text")?.text || "";
+        if (data.stream && data.messages[0].content.includes("原型工程师")) {
+          screenshotPrototypeRequests++;
+          assert(parts.some((p) => p.type === "image_url"));
+          assert(data.messages[0].content.includes("原型基线"));
+          assert(data.messages[0].content.includes("粘贴布局参考"));
+        }
+      }
       assert.equal(data.reasoning_effort, "high");
       if (data.stream) {
         res.writeHead(200, { "Content-Type": "text/event-stream" });
@@ -394,6 +406,7 @@ const wait = async (w, expression, timeoutMs = 10000) => {
           content = JSON.stringify({
             module: "客户模块",
             modulePurpose: "管理客户名单和负责人，供销售查阅",
+            captureNotes: ["缺少画布页面", "缺少详情页面"],
             featureName: next?.effect === "write" ? undefined : "填写客户名称",
             features: [
               {
@@ -635,7 +648,7 @@ const wait = async (w, expression, timeoutMs = 10000) => {
     `window.produck.models.test(${JSON.stringify(first.id)})`,
   );
   await wc.executeJavaScript(
-    `Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(document.querySelector('textarea'),'测试流式对话');document.querySelector('textarea').dispatchEvent(new Event('input',{bubbles:true}));`,
+    `Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(document.querySelector('[aria-label="修改要求"]'),'测试流式对话');document.querySelector('[aria-label="修改要求"]').dispatchEvent(new Event('input',{bubbles:true}));`,
   );
   await wait(
     window,
@@ -1506,6 +1519,14 @@ const wait = async (w, expression, timeoutMs = 10000) => {
     `!!document.querySelector('[aria-label="模块理解 Markdown"]')`,
     60000,
   );
+  await wait(
+    window,
+    `(async()=>{const s=await window.produck.discovery.state(${JSON.stringify(firstRelease.id)});return s.run?.phase==='ready'&&!!s.run.prototypeVersionId})()`,
+    60000,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('[role="tab"]')).find(b=>b.textContent==='理解产品').click()`,
+  );
   const draftUnderstanding = await wc.executeJavaScript(
     `window.produck.discovery.state(${JSON.stringify(firstRelease.id)})`,
   );
@@ -1562,6 +1583,7 @@ const wait = async (w, expression, timeoutMs = 10000) => {
     true,
   );
   assert.equal(draftUnderstanding.activeReportId, null);
+  assert(draftUnderstanding.run.prototypeVersionId);
   assert.equal(browserConfirmations, 0);
   assert(draftUnderstanding.reports[0].markdown.includes("客户模块"));
   await wc.executeJavaScript(
@@ -1623,6 +1645,18 @@ const wait = async (w, expression, timeoutMs = 10000) => {
     `(async()=>{const s=await window.produck.discovery.state(${JSON.stringify(firstRelease.id)});return s.run.id!==${JSON.stringify(reviewedUnderstanding.run.id)} && s.run.state==='draft'})()`,
     60000,
   );
+  await wait(
+    window,
+    `(async()=>{const s=await window.produck.discovery.state(${JSON.stringify(firstRelease.id)});return s.run.phase==='ready'&&!!s.run.prototypeVersionId})()`,
+    60000,
+  );
+  await wait(
+    window,
+    `Array.from(document.querySelectorAll('[role="tab"]')).some(b=>b.textContent==='原型'&&b.getAttribute('aria-selected')==='true')`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('[role="tab"]')).find(b=>b.textContent==='理解产品').click()`,
+  );
   const continuedUnderstanding = await wc.executeJavaScript(
     `window.produck.discovery.state(${JSON.stringify(firstRelease.id)})`,
   );
@@ -1669,28 +1703,94 @@ const wait = async (w, expression, timeoutMs = 10000) => {
     `document.querySelector('[aria-label="发送修改要求"]').click()`,
   );
   await wait(window, `document.body.innerText.includes('已使用审核记忆回答')`);
-  const screenshotFile = join(root, "manual-page.png");
-  writeFileSync(screenshotFile, (await wc.capturePage()).toPNG());
-  dialog.showOpenDialog = async () => ({
-    canceled: false,
-    filePaths: [screenshotFile],
-  });
+  await wait(
+    window,
+    `(async()=>{const s=await window.produck.discovery.state(${JSON.stringify(firstRelease.id)});return s.run?.phase==='ready'&&!!s.run.prototypeVersionId})()`,
+    60000,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('.nav')).find(b=>b.textContent.includes('工作台')).click()`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('[role="tab"]')).find(b=>b.textContent==='理解产品').click()`,
+  );
   const beforeSupplement = await wc.executeJavaScript(
     `window.produck.discovery.state(${JSON.stringify(firstRelease.id)})`,
   );
-  const supplement = await wc.executeJavaScript(
-    `window.produck.discovery.supplement(${JSON.stringify(firstRelease.id)},${JSON.stringify(beforeSupplement.run.id)},${JSON.stringify(beforeSupplement.run.modules[0].name)},"手动画布布局参考")`,
+  const capabilities = await wc.executeJavaScript(
+    `window.produck.models.probe(${JSON.stringify(firstRelease.id)})`,
   );
-  assert.notEqual(supplement.reportId, beforeSupplement.run.reportId);
-  const afterSupplement = await wc.executeJavaScript(
+  assert.equal(capabilities.image, "supported");
+  const pngBase64 = (await wc.capturePage()).toPNG().toString("base64");
+  await wait(window, `!!document.querySelector('.paste-zone')`);
+  await wc.executeJavaScript(
+    `(()=>{const data=new DataTransfer();data.items.add(new File([Uint8Array.from(atob(${JSON.stringify(pngBase64)}),c=>c.charCodeAt(0))],'paste.png',{type:'image/png'}));const zone=document.querySelector('.paste-zone');zone.focus();zone.dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true,cancelable:true}));})()`,
+  );
+  await wait(window, `!!document.querySelector('.paste-zone img')`);
+  assert.equal(screenshotPrototypeRequests, 0);
+  await wc.executeJavaScript(
+    `(()=>{const e=document.querySelector('[aria-label$="补充说明"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,'粘贴布局参考');e.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('[aria-label="待补充列表"]').scrollIntoView({block:'start'});})()`,
+  );
+  await wc.executeJavaScript(
+    `new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`,
+  );
+  writeFileSync(
+    "docs/verification/desktop-supplement-paste.png",
+    (await wc.capturePage()).toPNG(),
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='提交 1 项并补充原型').click()`,
+  );
+  await wait(
+    window,
+    `(async()=>{const s=await window.produck.discovery.state(${JSON.stringify(firstRelease.id)});return s.run.id!==${JSON.stringify(beforeSupplement.run.id)}&&s.run.phase==='ready'&&!!s.run.prototypeVersionId&&!s.run.prototypeError})()`,
+    60000,
+  );
+  const pasted = await wc.executeJavaScript(
     `window.produck.discovery.state(${JSON.stringify(firstRelease.id)})`,
   );
-  assert.equal(afterSupplement.activeReportId, beforeSupplement.activeReportId);
-  assert.equal(
-    afterSupplement.reports.find((r) => r.id === supplement.reportId)
-      .approvedAt,
-    undefined,
+  assert.equal(pasted.activeReportId, beforeSupplement.activeReportId);
+  assert.equal(pasted.run.supplements.length, 1);
+  assert.equal(screenshotPrototypeRequests, 1);
+  const pastedVersions = await wc.executeJavaScript(
+    `window.produck.workbench.versions(${JSON.stringify(firstRelease.id)})`,
   );
+  assert.equal(
+    pastedVersions.find((v) => v.id === pasted.run.prototypeVersionId)
+      .baselineId,
+    beforeSupplement.run.prototypeVersionId,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('[role="tab"]')).find(b=>b.textContent==='理解产品').click()`,
+  );
+  await wait(
+    window,
+    `Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='去浏览器补采此项'&&!b.disabled)`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='去浏览器补采此项').click()`,
+  );
+  await wc.executeJavaScript(
+    `document.querySelector('[aria-label="页面地址"]').form.requestSubmit()`,
+  );
+  await wait(
+    window,
+    `Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='采集此页并补充原型'&&!b.disabled)`,
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='采集此页并补充原型').click()`,
+  );
+  await wait(
+    window,
+    `(async()=>{const s=await window.produck.discovery.state(${JSON.stringify(firstRelease.id)});return s.run.id!==${JSON.stringify(pasted.run.id)}&&s.run.phase==='ready'&&!s.run.prototypeError})()`,
+    60000,
+  );
+  const supplemented = await wc.executeJavaScript(
+    `window.produck.discovery.state(${JSON.stringify(firstRelease.id)})`,
+  );
+  assert.equal(supplemented.run.supplements.length, 2);
+  assert.equal(supplemented.activeReportId, beforeSupplement.activeReportId);
+  assert.equal(supplemented.run.roundSteps, beforeSupplement.run.roundSteps);
   const exportedPage = join(root, "page.html");
   dialog.showSaveDialog = async () => ({
     canceled: false,

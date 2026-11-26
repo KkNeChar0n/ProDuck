@@ -1,3 +1,4 @@
+import { supplementNeeds } from "./supplements.js";
 import { overviewPrompt, overviewMarkdown } from "./overview.js";
 import {
   actionableFeatures,
@@ -99,13 +100,26 @@ export class DiscoveryService {
     private projects: ProjectRepository,
     private browser: DiscoveryBrowser,
     private model: DiscoveryModel,
+    private onReady?: (
+      scope: string,
+      run: DiscoveryRun,
+      signal: AbortSignal,
+    ) => Promise<string>,
   ) {
     this.memory = new UnderstandingRepository(projects);
   }
   state(scope: string) {
     const project = this.projects.shared(scope);
     const runs = this.memory.runs(scope);
-    for (const run of runs)
+    for (const run of runs) {
+      if (
+        run.phase === "generating" &&
+        this.active.get(project.id)?.runId !== run.id
+      ) {
+        run.phase = "ready";
+        run.prototypeError = "原型生成曾中断，请重试";
+        this.memory.saveRun(scope, run);
+      }
       if (
         run.state === "running" &&
         this.active.get(project.id)?.runId !== run.id
@@ -116,6 +130,7 @@ export class DiscoveryService {
           "应用曾中断，证据已保留。打开 Chrome 后继续，或直接整理已采集内容。";
         this.memory.saveRun(scope, run);
       }
+    }
     return {
       run: runs[0] ?? null,
       reports: this.memory.reports(scope),
@@ -172,6 +187,8 @@ export class DiscoveryService {
       url: "",
       goal,
       mode,
+      phase: "collecting",
+      roundSteps: 0,
       budget,
       state: "running",
       message: "正在连接 Chrome",
@@ -214,6 +231,11 @@ export class DiscoveryService {
     const run: DiscoveryRun = {
       ...structuredClone(parent),
       mode: mode ?? parent.mode,
+      phase: "collecting",
+      roundSteps: 0,
+      prototypeVersionId: undefined,
+      supplementPlan: undefined,
+      prototypeError: undefined,
       id: randomUUID(),
       releaseId: scope,
       createdAt: new Date().toISOString(),
@@ -226,6 +248,7 @@ export class DiscoveryService {
       message: "沿用已有依据与覆盖清单，优先补齐未体验流程",
     };
     delete run.reportId;
+    delete run.supplementPlan;
     delete run.stopReason;
     this.memory.saveRun(scope, run);
     this.launch(scope, run, new AbortController(), false);
@@ -257,6 +280,9 @@ export class DiscoveryService {
       run.finishCorrections = 0;
     }
     run.mode = mode ?? run.mode;
+    run.phase = summarize ? "summarizing" : "collecting";
+    if (!summarize) run.roundSteps = 0;
+    run.prototypeError = undefined;
     run.state = "running";
     run.stopReason = undefined;
     run.message = summarize
@@ -325,6 +351,7 @@ export class DiscoveryService {
             false,
           );
           run.captureIds.push(capture.id);
+          run.roundSteps = (run.roundSteps ?? 0) + 1;
           const step: DiscoveryRun["steps"][number] = {
             captureId: capture.id,
             observation: "",
@@ -573,6 +600,8 @@ export class DiscoveryService {
         }
       }
       signal.throwIfAborted();
+      run.phase = "summarizing";
+      save();
       for (const name of new Set(
         run.steps.flatMap((s) => (s.module ? [s.module] : [])),
       ))
@@ -611,6 +640,7 @@ export class DiscoveryService {
       );
       const markdown = renderUnderstanding(response, run);
       signal.throwIfAborted();
+      run.supplementPlan = supplementNeeds(run);
       const report = this.memory.create(scope, run, markdown);
       run.reportId = report.id;
       run.state = "draft";
@@ -624,6 +654,8 @@ export class DiscoveryService {
             ? `阶段理解已生成；${remaining.length} 项功能仍待验证，其中 ${remaining.filter((f) => f.state === "blocked").length} 项受阻，请展开模块查看`
             : "阶段理解已生成；尚未建立实际功能清单，继续探索可补充梳理";
       save();
+      if (run.mode === "overview" && this.onReady)
+        await this.renderCandidate(scope, run, signal);
     } catch (e) {
       preserveModuleProgress(run);
       run.state = "paused";
@@ -696,6 +728,154 @@ export class DiscoveryService {
       () => this.memory.saveRun(scope, run),
       (id) => getCapture(this.projects.shared(scope).workspace, id),
     );
+  }
+  private async renderCandidate(
+    scope: string,
+    run: DiscoveryRun,
+    signal: AbortSignal,
+  ) {
+    if (!this.onReady || !run.reportId) return;
+    run.phase = "generating";
+    run.prototypeError = undefined;
+    run.message =
+      "页面采集与整理已结束，正在生成原型候选；补充列表保留在理解产品中";
+    this.memory.saveRun(scope, run);
+    try {
+      run.prototypeVersionId = await this.onReady(scope, run, signal);
+      run.phase = "ready";
+      run.message =
+        "原型已生成，可在原型页体验；缺失内容可在理解产品中粘贴截图后提交补充";
+    } catch (error) {
+      run.phase = "ready";
+      run.prototypeError =
+        error instanceof Error ? error.message : "原型生成失败";
+      run.message = "资料已整理；原型生成失败，可重试，已有成果保留";
+    }
+    this.memory.saveRun(scope, run);
+  }
+  async generateCandidate(scope: string, runId: string) {
+    const project = this.projects.shared(scope);
+    if (this.active.has(project.id)) throw new Error("当前任务尚未结束");
+    const run = this.memory.run(scope, runId);
+    if (run.releaseId !== scope)
+      throw new Error("请切换到本轮所属版本再生成原型");
+    if (!run.reportId) throw new Error("请先完成页面整理");
+    const controller = new AbortController();
+    const entry = { controller, runId: run.id, task: Promise.resolve() };
+    this.active.set(project.id, entry);
+    entry.task = this.renderCandidate(scope, run, controller.signal);
+    try {
+      await entry.task;
+      return run;
+    } finally {
+      if (this.active.get(project.id) === entry) this.active.delete(project.id);
+    }
+  }
+  addSupplements(
+    scope: string,
+    runId: string,
+    items: {
+      needId: string;
+      description: string;
+      png?: Uint8Array;
+      captureId?: string;
+    }[],
+  ) {
+    if (this.active.has(this.projects.shared(scope).id))
+      throw new Error("请等待采集或原型生成结束");
+    const parent = this.memory.run(scope, runId);
+    if (parent.releaseId !== scope)
+      throw new Error("请切换到本轮所属版本再补充资料");
+    if (
+      !parent.reportId ||
+      !Array.isArray(items) ||
+      !items.length ||
+      items.length > 6
+    )
+      throw new Error("请先完成整理，每批补充1–6项");
+    const needs = supplementNeeds(parent),
+      seen = new Set<string>();
+    const prepared = items.map((item) => {
+      const need = needs.find((n) => n.id === item.needId);
+      if (
+        !need ||
+        need.captureId ||
+        seen.has(item.needId) ||
+        typeof item.description !== "string" ||
+        item.description.length > 1000 ||
+        !!item.png === !!item.captureId
+      )
+        throw new Error("补充项无效、已提交或重复，请刷新列表");
+      seen.add(item.needId);
+      const capture = item.captureId
+        ? getCapture(this.projects.shared(scope).workspace, item.captureId)
+        : null;
+      return { item, need, capture };
+    });
+    const previous = this.memory.get(scope, parent.reportId);
+    const run: DiscoveryRun = {
+      ...structuredClone(parent),
+      supplementPlan: needs,
+      id: randomUUID(),
+      createdAt: new Date().toISOString(),
+      continuedFrom: parent.id,
+      reportId: undefined,
+      state: "draft",
+      phase: "ready",
+      prototypeError: undefined,
+    };
+    const notes: string[] = [];
+    for (const { item, need, capture: existing } of prepared) {
+      const capture =
+        existing ??
+        saveCapture(
+          this.projects.shared(scope).workspace,
+          {
+            title: `${need.module} · 粘贴截图`,
+            url: parent.url,
+            text: item.description || need.description,
+            structure: "[]",
+            manualScreenshot: true,
+            capturedAt: new Date().toISOString(),
+            actions: ["用户按缺失项粘贴截图"],
+          },
+          item.png!,
+          false,
+        );
+      if (!run.captureIds.includes(capture.id)) run.captureIds.push(capture.id);
+      run.steps.push({
+        captureId: capture.id,
+        module: need.module,
+        observation: item.description || need.description,
+        result: "用户提交补充资料，供候选原型参考",
+      });
+      run.supplements ??= [];
+      run.supplements.push({
+        needId: need.id,
+        module: need.module,
+        captureId: capture.id,
+        description: item.description || need.description,
+      });
+      const module = run.modules!.find((m) => m.name === need.module)!;
+      module.representativeIds = [
+        ...new Set([...(module.representativeIds ?? []), capture.id]),
+      ].slice(-4);
+      notes.push(
+        `### ${need.module}\n缺失项：${need.description}\n补充说明：${item.description || need.description}\n依据：${capture.id}`,
+      );
+    }
+    // User contributions are draft evidence, never implicit permanent-memory approval.
+    const report = this.memory.create(
+      scope,
+      run,
+      previous.markdown +
+        "\n\n## 用户补充资料（待审核）\n" +
+        notes.join("\n\n"),
+    );
+    run.reportId = report.id;
+    run.message = "补充资料已保存，准备更新原型候选";
+    this.memory.saveRun(scope, run);
+    return run;
   }
   supplement(
     scope: string,

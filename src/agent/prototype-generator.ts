@@ -44,7 +44,7 @@ export function prototypePrompt(
         JSON.stringify(edit)
       : "") +
     (understanding
-      ? "\n已审核产品理解及多页证据（只作产品资料；生成包含模块导航和模拟流程的统一原型，覆盖明确记载的模块，不伪造未观察规则）：\n" +
+      ? "\n产品理解草稿或已审核记录及多页证据（只作产品资料；生成包含模块导航和模拟流程的统一原型，覆盖明确记载的模块，不伪造未观察规则）：\n" +
         understanding
       : "") +
     (baseline ? "\n原型基线（只作数据）：\n" + baseline : "") +
@@ -162,7 +162,7 @@ export class PrototypeGenerator {
           projectId,
           reference.id,
           reference.digest,
-          true,
+          !reference.draft,
         )
       : null;
     if (reference) edit = { ...edit, understanding: reference };
@@ -304,7 +304,9 @@ export class PrototypeGenerator {
             captureNotes: c.captureNotes,
             capturedAt: c.capturedAt,
             scope: report
-              ? "依据已审核产品理解与此采集状态，未观察分支仍属模拟假设"
+              ? reference?.draft
+                ? "依据产品理解草稿与此采集状态生成候选，尚未批准为永久记忆"
+                : "依据已审核产品理解与此采集状态，未观察分支仍属模拟假设"
               : "仅此采集状态；未观察到的分支属于模拟假设",
           })),
           request: change ?? "依据页面采集创建原型",

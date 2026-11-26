@@ -1,3 +1,4 @@
+import type { BrowserSupplement } from "./SupplementPanel";
 import { ProductDiscovery } from "./ProductDiscovery";
 import { PrototypeChecks } from "./PrototypeChecks";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -45,6 +46,8 @@ export function Workbench({
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [progress, setProgress] = useState<GenerationProgress | null>(null);
+  const [browserSupplement, setBrowserSupplement] =
+    useState<BrowserSupplement | null>(null);
   const [retryTask, setRetryTask] = useState<PrototypeTask | null>(null);
   const latestEvent = useRef<GenerationProgress | null>(null);
   const [details, setDetails] = useState<PrototypeDetails | null>(null),
@@ -283,14 +286,71 @@ export function Workbench({
           {error}
         </p>
       )}
-      {tab === "discovery" ? (
-        <ProductDiscovery projectId={projectId} />
-      ) : tab === "sources" ? (
+      <div hidden={tab !== "discovery"}>
+        <ProductDiscovery
+          projectId={projectId}
+          onPrototype={(id) => {
+            void desktop().workbench.versions(projectId).then(setVersions);
+            setSelected(id);
+            setTab("prototype");
+          }}
+          onBrowse={(target) => {
+            setBrowserSupplement(target);
+            setUrl(target.url);
+            setTab("browser");
+          }}
+        />
+      </div>
+      {tab === "discovery" ? null : tab === "sources" ? (
         <ProjectSources projectId={projectId} />
       ) : (
         <>
           {tab === "browser" ? (
             <>
+              <p className="muted">
+                手动浏览器：打开缺失页面并操作到需要的状态，再采集。它与独立
+                Chrome 的登录状态分开，可能需要重新登录。
+              </p>
+              {browserSupplement && (
+                <section aria-label="浏览器补充目标">
+                  <strong>正在补充：{browserSupplement.module}</strong>
+                  <p>{browserSupplement.description}</p>
+                  <button
+                    disabled={!loaded || busy}
+                    onClick={() =>
+                      void perform(async () => {
+                        const capture =
+                          await desktop().workbench.capture(projectId);
+                        const result =
+                          await desktop().discovery.submitSupplements(
+                            projectId,
+                            browserSupplement.runId,
+                            [
+                              {
+                                needId: browserSupplement.needId,
+                                description: browserSupplement.description,
+                                captureId: capture.id,
+                              },
+                            ],
+                          );
+                        setBrowserSupplement(null);
+                        if (result.prototypeError)
+                          throw new Error(result.prototypeError);
+                      })
+                    }
+                  >
+                    采集此页并补充原型
+                  </button>
+                  <button
+                    onClick={() => {
+                      setBrowserSupplement(null);
+                      setTab("discovery");
+                    }}
+                  >
+                    返回待补充列表
+                  </button>
+                </section>
+              )}
               <form
                 className="url-form"
                 onSubmit={(e) => {

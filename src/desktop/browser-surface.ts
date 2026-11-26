@@ -1,3 +1,4 @@
+import { snapshotExpression } from "../discovery/snapshot.js";
 import { prototypeCsp } from "../prototypes/policy.js";
 import { fileURLToPath } from "node:url";
 import type { PreviewState, RestoreResult } from "../contracts/workbench.js";
@@ -5,7 +6,7 @@ import { WebContentsView, type BrowserWindow } from "electron";
 import { randomUUID, createHash } from "node:crypto";
 import { parseWebDestination } from "./navigation.js";
 import type { SurfaceBounds } from "../contracts/workbench.js";
-const captureScript = `(()=>{const visible=e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0&&getComputedStyle(e).visibility!=='hidden';};const nodes=[...document.body.querySelectorAll('*')].filter(visible).slice(0,450).map(e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect();return {tag:e.tagName,role:e.getAttribute('role'),text:e.children.length?undefined:e.textContent?.slice(0,180),placeholder:e.getAttribute('placeholder'),type:e.getAttribute('type'),box:{x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)},style:{color:s.color,background:s.backgroundColor,font:s.font,fontSize:s.fontSize,display:s.display,gap:s.gap,padding:s.padding,border:s.border,borderRadius:s.borderRadius}};});const url=new URL(location.href);url.search='';url.hash='';url.username='';url.password='';return {title:document.title,url:url.href,text:document.body.innerText.slice(0,18000),structure:JSON.stringify(nodes).slice(0,60000)};})()`;
+const captureScript = `(()=>{const visible=e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0&&getComputedStyle(e).visibility!=='hidden';};const nodes=[...document.body.querySelectorAll('*')].filter(visible).slice(0,450).map(e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect();return {tag:e.tagName,role:e.getAttribute('role'),text:e.children.length?undefined:e.textContent?.slice(0,180),placeholder:e.getAttribute('placeholder'),type:e.getAttribute('type'),box:{x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)},style:{color:s.color,background:s.backgroundColor,font:s.font,fontSize:s.fontSize,display:s.display,gap:s.gap,padding:s.padding,border:s.border,borderRadius:s.borderRadius}};});const url=new URL(location.href);url.search='';url.hash='';url.username='';url.password='';return {...${snapshotExpression},title:document.title,url:url.href,text:document.body.innerText.slice(0,18000),structure:JSON.stringify(nodes).slice(0,60000)};})()`;
 export class BrowserSurface {
   private views = new Map<string, WebContentsView>();
   private actions = new Map<string, string[]>();

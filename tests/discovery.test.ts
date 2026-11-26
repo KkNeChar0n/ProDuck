@@ -1093,3 +1093,108 @@ test("overview blocks form actions and finishes without deep coverage; screensho
     db.close();
   }
 });
+
+test("overview auto candidate waits for summary; supplements keep identity, baseline and memory approval separate", async () => {
+  const { db, projects, p, other } = fixture();
+  let service: DiscoveryService;
+  const generated: string[] = [];
+  service = new DiscoveryService(
+    projects,
+    {
+      open: async () => {},
+      begin: async () => page.url,
+      observe: async () => ({ ...page, png: new Uint8Array([1]) }),
+      action: async () => {},
+      manual: async () => {},
+      close: () => {},
+    },
+    async (_id, prompt) => {
+      if (prompt.startsWith("PRODUCK_DISCOVERY_MODULE"))
+        return moduleReply(prompt);
+      if (prompt.startsWith("PRODUCK_DISCOVERY_REPORT"))
+        return JSON.stringify(output(service.state(p.id).run!));
+      return JSON.stringify({
+        module: "客户",
+        modulePurpose: "客户资料管理",
+        observation: "列表布局",
+        captureNotes: ["缺画布截图", "缺详情截图"],
+        action: { kind: "finish", reason: "足够还原主页面" },
+      });
+    },
+    async (scope, run) => {
+      assert(run.reportId);
+      assert(run.modules!.every((m) => m.markdown));
+      assert.equal(service.memory.active(scope), null);
+      assert.equal(
+        service.memory.get(scope, run.reportId!).approvedAt,
+        undefined,
+      );
+      if (generated.length) assert.equal(run.prototypeVersionId, generated[0]);
+      const id = `candidate-${generated.length}`;
+      generated.push(id);
+      return id;
+    },
+  );
+  const settle = async () => {
+    for (let i = 0; i < 400; i++) {
+      const r = service.state(p.id).run;
+      if (r?.state !== "running" && r?.phase !== "generating") return;
+      await new Promise((r) => setTimeout(r, 10));
+    }
+  };
+  try {
+    const initial = await service.start(p.id, "理解", 16, "overview");
+    await settle();
+    const before = service.memory.run(p.id, initial.id);
+    assert.equal(before.phase, "ready");
+    assert.equal(before.prototypeVersionId, "candidate-0");
+    assert.equal(before.roundSteps, 1);
+    const frozen = JSON.stringify(before);
+    const plan = before.supplementPlan!;
+    assert.equal(plan.length, 2);
+    const foreign = saveCapture(
+      other.workspace,
+      {
+        title: "foreign",
+        url: page.url,
+        text: "",
+        structure: "[]",
+        capturedAt: new Date().toISOString(),
+        actions: [],
+      },
+      new Uint8Array([1]),
+    );
+    assert.throws(() =>
+      service.addSupplements(p.id, initial.id, [
+        { needId: plan[0].id, description: "", captureId: foreign.id },
+      ]),
+    );
+    assert.throws(() =>
+      service.addSupplements(p.id, initial.id, [
+        { needId: plan[0].id, description: "", png: new Uint8Array([2]) },
+        { needId: plan[0].id, description: "", png: new Uint8Array([3]) },
+      ]),
+    );
+    const next = service.addSupplements(p.id, initial.id, [
+      { needId: plan[1].id, description: "详情布局", png: new Uint8Array([2]) },
+      { needId: plan[0].id, description: "画布布局", png: new Uint8Array([3]) },
+    ]);
+    assert.deepEqual(
+      next.supplements!.map((s) => s.description),
+      ["详情布局", "画布布局"],
+    );
+    assert.equal(next.roundSteps, 1);
+    assert.equal(next.prototypeVersionId, "candidate-0");
+    const result = await service.generateCandidate(p.id, next.id);
+    assert.equal(result.prototypeVersionId, "candidate-1");
+    assert.equal(JSON.stringify(service.memory.run(p.id, initial.id)), frozen);
+    assert.throws(() =>
+      service.addSupplements(p.id, next.id, [
+        { needId: plan[0].id, description: "重复", png: new Uint8Array([2]) },
+      ]),
+    );
+  } finally {
+    await service.close();
+    db.close();
+  }
+});

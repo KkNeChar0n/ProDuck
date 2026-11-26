@@ -1,3 +1,4 @@
+import { overviewCounts } from "../../discovery/supplements";
 import type { DiscoveryRun } from "../../contracts/discovery";
 export function OverviewProgress({
   run,
@@ -7,6 +8,7 @@ export function OverviewProgress({
   exportPage: (id: string) => void;
 }) {
   const modules = run.modules ?? [];
+  const counts = overviewCounts(run);
   const collected = modules.filter(
     (m) =>
       m.representativeIds?.length || run.steps.some((s) => s.module === m.name),
@@ -18,10 +20,42 @@ export function OverviewProgress({
           ? "正在了解产品与采集页面"
           : "产品理解与页面资料"}
       </h3>
+      <div className="discovery-metrics">
+        <div>
+          <strong>
+            本轮已走 {counts.used} 步 · 剩余 {counts.remaining} 步预算
+          </strong>
+          <progress
+            aria-label="本轮步数进度"
+            value={Math.min(counts.used, counts.total)}
+            max={Math.max(1, counts.total)}
+          />
+          <small>
+            上限 {counts.total}{" "}
+            步；资料足够时可提前结束，不代表还有这些功能没做。
+          </small>
+        </div>
+        <div>
+          <strong>
+            已采集 {collected}/{modules.length} 个模块 · 待采集{" "}
+            {counts.uncollected} 个
+          </strong>
+          <small>
+            已整理 {counts.summarized}/{modules.length} 个 · 待补充{" "}
+            {counts.needs} 项
+          </small>
+        </div>
+      </div>
       <p>
-        已采集 {collected}/{modules.length} 个已识别模块的页面 · 本轮{" "}
-        {run.captureIds.length - (run.roundStart ?? 0)}/
-        {run.budget - (run.roundStart ?? 0)} 个页面状态
+        当前阶段：
+        {
+          {
+            collecting: "浏览页面",
+            summarizing: "整理模块理解",
+            generating: "绘制原型",
+            ready: "可体验原型 / 补充资料",
+          }[run.phase ?? (run.state === "running" ? "collecting" : "ready")]
+        }
       </p>
       <p className="muted">
         用于还原原型和撰写文档，不检查全部功能分支。历史观察直接复用，无需完成旧验收清单。

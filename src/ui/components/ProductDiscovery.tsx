@@ -1,10 +1,17 @@
+import { SupplementPanel, type BrowserSupplement } from "./SupplementPanel";
 import { OverviewProgress } from "./OverviewProgress";
 import { useEffect, useRef, useState } from "react";
 import type { DiscoveryState } from "../../contracts/discovery";
 import { desktop, errorText } from "../bridge";
-export function ProductDiscovery({ projectId }: { projectId: string }) {
-  const [screenshotModule, setScreenshotModule] = useState("");
-  const [screenshotDescription, setScreenshotDescription] = useState("");
+export function ProductDiscovery({
+  projectId,
+  onBrowse,
+  onPrototype,
+}: {
+  projectId: string;
+  onBrowse: (target: BrowserSupplement) => void;
+  onPrototype: (id: string) => void;
+}) {
   const reviewRef = useRef<HTMLElement>(null);
   const restoredBudget = useRef(false);
   const [state, setState] = useState<DiscoveryState>({
@@ -58,14 +65,14 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
     };
     void poll();
     const timer =
-      state.run?.state === "running"
+      state.run?.state === "running" || state.run?.phase === "generating"
         ? setInterval(() => void poll(), 1200)
         : undefined;
     return () => {
       alive = false;
       clearInterval(timer);
     };
-  }, [projectId, state.run?.state]);
+  }, [projectId, state.run?.state, state.run?.phase]);
   useEffect(() => {
     if (state.reports.length && !selected)
       setSelected(state.run?.reportId ?? state.reports[0].id);
@@ -77,7 +84,8 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
   useEffect(() => {
     setMarkdown(report?.markdown ?? "");
   }, [report?.id]);
-  const running = state.run?.state === "running",
+  const running =
+      state.run?.state === "running" || state.run?.phase === "generating",
     dirty = !!report && markdown !== report.markdown;
   async function act(action: () => Promise<unknown>) {
     setBusy(true);
@@ -125,6 +133,9 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
         />
         <button disabled={busy || running}>打开独立 Chrome</button>
       </form>
+      <p className="muted">
+        「重新探索」会从0步开始建立新一轮；旧资料与原型保留。采集和整理结束后自动生成候选原型，永久记忆仍需单独审核。
+      </p>
       <label>
         本轮关注范围（可选）
         <textarea
@@ -278,59 +289,55 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
               </button>
             </div>
           )}
-          <section aria-label="补充页面截图">
-            <h3>HTML 不完整？补充页面截图</h3>
-            <select
-              aria-label="截图所属模块"
-              value={screenshotModule}
-              onChange={(e) => setScreenshotModule(e.target.value)}
-              disabled={busy || running}
-            >
-              <option value="">选择截图所属模块</option>
-              {state.run.modules?.map((m) => (
-                <option key={m.name} value={m.name}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
-            <input
-              aria-label="截图内容说明"
-              placeholder="如：编排画布的节点与连线布局"
-              value={screenshotDescription}
-              maxLength={1000}
-              onChange={(e) => setScreenshotDescription(e.target.value)}
-              disabled={busy || running}
-            />
-            <button
-              disabled={
-                busy ||
-                running ||
-                !screenshotModule ||
-                !screenshotDescription.trim()
-              }
-              onClick={() =>
-                void act(async () => {
-                  const result = await desktop().discovery.supplement(
-                    projectId,
-                    state.run!.id,
-                    screenshotModule,
-                    screenshotDescription,
-                  );
-                  if (result) {
-                    setScreenshotDescription("");
-                    setNotice(
-                      "截图已关联到模块。请审核新草稿后生成原型，旧批准记录保留。",
-                    );
-                  }
-                })
-              }
-            >
-              选择 PNG / JPEG 截图
+          {state.run.prototypeVersionId && (
+            <button onClick={() => onPrototype(state.run!.prototypeVersionId!)}>
+              查看本轮原型
             </button>
-            <p className="muted">
-              每张不超过20MB；补图后需重新审核。生成时最多使用最近6张补图，请优先提供关键页面。
-            </p>
-          </section>
+          )}
+          {state.run.prototypeError && (
+            <div role="alert">
+              <p>原型生成未完成：{state.run.prototypeError}</p>
+              <button
+                disabled={busy || running}
+                onClick={() =>
+                  void act(() =>
+                    desktop().discovery.generateCandidate(
+                      projectId,
+                      state.run!.id,
+                    ),
+                  )
+                }
+              >
+                重试生成原型
+              </button>
+            </div>
+          )}
+          {!state.run.prototypeVersionId &&
+            !state.run.prototypeError &&
+            state.run.reportId &&
+            !running && (
+              <button
+                onClick={() =>
+                  void act(() =>
+                    desktop().discovery.generateCandidate(
+                      projectId,
+                      state.run!.id,
+                    ),
+                  )
+                }
+              >
+                生成本轮原型
+              </button>
+            )}
+          {state.run.reportId && (
+            <SupplementPanel
+              projectId={projectId}
+              run={state.run}
+              busy={busy || running}
+              onSubmit={refresh}
+              onBrowse={onBrowse}
+            />
+          )}
           <details>
             <summary>查看探索记录与未覆盖项</summary>
             {state.run.steps.map((s, i) => (

@@ -1,3 +1,4 @@
+import { latestDescendant } from "../prototypes/lineage.js";
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { ChromeDiscoveryBrowser } from "../discovery/chrome.js";
@@ -71,6 +72,90 @@ export function registerWorkbenchIpc(
       },
     ),
     discoveryModel(models),
+    async (scope, run, signal) => {
+      const report = discovery.memory.get(scope, run.reportId!);
+      const version = await generator.generate(
+        scope,
+        report.captureIds[0],
+        (event) => {
+          const win = getWindow();
+          if (win && !win.isDestroyed())
+            win.webContents.send("prototypes:progress", event);
+        },
+        run.prototypeVersionId
+          ? "根据用户逐项补充的页面与截图完善当前原型，保留无关模块和现有交互"
+          : "根据本轮产品理解和页面资料生成可操作候选原型。尚缺内容标为待补充，不伪造已确认规则",
+        run.prototypeVersionId
+          ? latestDescendant(versions.list(scope), run.prototypeVersionId)
+          : undefined,
+        {
+          understanding: { id: report.id, digest: report.digest, draft: true },
+        },
+        signal,
+      );
+      return version.id;
+    },
+  );
+  ipcMain.handle(
+    "discovery:generate-candidate",
+    (e, id: string, runId: string) => {
+      trusted(e, id);
+      return discovery.generateCandidate(id, runId);
+    },
+  );
+  ipcMain.handle(
+    "discovery:submit-supplements",
+    async (
+      e,
+      id: string,
+      runId: string,
+      items: {
+        needId: string;
+        description: string;
+        image?: string;
+        captureId?: string;
+      }[],
+    ) => {
+      trusted(e, id);
+      if (!Array.isArray(items) || !items.length || items.length > 6)
+        throw new Error("每批提交1–6项补充");
+      const prepared = items.map((item) => {
+        if (
+          !item ||
+          typeof item.needId !== "string" ||
+          typeof item.description !== "string"
+        )
+          throw new Error("补充格式无效");
+        if (item.captureId) {
+          if (item.image) throw new Error("每项只能选择截图或浏览器采集");
+          return {
+            needId: item.needId,
+            description: item.description,
+            captureId: item.captureId,
+          };
+        }
+        if (
+          typeof item.image !== "string" ||
+          item.image.length > 28 * 1024 * 1024 ||
+          !/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(item.image)
+        )
+          throw new Error("请粘贴不超过20MB的PNG/JPEG图片");
+        let img = nativeImage.createFromDataURL(item.image);
+        if (img.isEmpty()) throw new Error("无法读取截图");
+        const size = img.getSize();
+        if (Math.max(size.width, size.height) > 2400)
+          img = img.resize(
+            size.width >= size.height ? { width: 2400 } : { height: 2400 },
+          );
+        return {
+          needId: item.needId,
+          description: item.description,
+          png: img.toPNG(),
+        };
+      });
+      const run = discovery.addSupplements(id, runId, prepared);
+      return discovery.generateCandidate(id, run.id);
+    },
   );
   ipcMain.handle("discovery:open", (e, id: string, url: string) => {
     trusted(e, id);
@@ -447,9 +532,23 @@ export function registerWorkbenchIpc(
     trusted(e, id);
     return generator.tasks(id);
   });
-  ipcMain.handle("prototypes:retry", (e, id: string, runId: string) => {
+  ipcMain.handle("prototypes:retry", async (e, id: string, runId: string) => {
     trusted(e, id);
-    return generator.retry(id, runId, notify(e));
+    const version = await generator.retry(id, runId, notify(e));
+    const reference = versions.details(id, version.id)?.understanding;
+    if (reference?.draft) {
+      const run = discovery.memory
+        .runs(id)
+        .find((r) => r.reportId === reference.id && r.releaseId === id);
+      if (run) {
+        run.prototypeVersionId = version.id;
+        run.prototypeError = undefined;
+        run.phase = "ready";
+        run.message = "原型重试成功，可继续补充资料";
+        discovery.memory.saveRun(id, run);
+      }
+    }
+    return version;
   });
   ipcMain.handle(
     "prototypes:compare",

@@ -111,6 +111,17 @@ export interface DiscoveryFeature {
   sourceIds: string[];
 }
 export interface DiscoveryRun {
+  roundSteps?: number;
+  phase?: "collecting" | "summarizing" | "generating" | "ready";
+  prototypeVersionId?: string;
+  prototypeError?: string;
+  supplementPlan?: { id: string; module: string; description: string }[];
+  supplements?: {
+    needId: string;
+    module: string;
+    captureId: string;
+    description: string;
+  }[];
   mode?: "overview";
   features?: DiscoveryFeature[];
   stopReason?: string;
@@ -169,6 +180,17 @@ export interface DiscoveryState {
   activeReportId: string | null;
 }
 export interface DiscoveryBridge {
+  submitSupplements(
+    id: string,
+    runId: string,
+    items: {
+      needId: string;
+      description: string;
+      image?: string;
+      captureId?: string;
+    }[],
+  ): Promise<DiscoveryRun>;
+  generateCandidate(id: string, runId: string): Promise<DiscoveryRun>;
   supplement(
     id: string,
     runId: string,

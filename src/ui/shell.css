@@ -1236,3 +1236,26 @@ dialog::backdrop {
   border-radius: 8px;
   overflow-wrap: anywhere;
 }
+
+.supplement-item {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid #ddd9c9;
+  border-radius: 10px;
+}
+.paste-zone {
+  border: 2px dashed #a9b5a7;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 10px 0;
+  background: #faf9f3;
+  min-height: 70px;
+}
+.paste-zone:focus {
+  outline: 2px solid #466654;
+}
+.paste-zone img {
+  max-width: 100%;
+  max-height: 240px;
+  object-fit: contain;
+}

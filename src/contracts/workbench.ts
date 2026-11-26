@@ -97,13 +97,13 @@ export interface ElementPromptBatch {
   items: ElementPrompt[];
 }
 export interface PrototypeEdit {
-  understanding?: { id: string; digest: string };
+  understanding?: { id: string; digest: string; draft?: boolean };
   batch?: ElementPromptBatch;
   elementId?: string;
   state?: PreviewState;
 }
 export interface PrototypeDetails {
-  understanding?: { id: string; digest: string };
+  understanding?: { id: string; digest: string; draft?: boolean };
   coverage?: {
     captureId: string;
     title: string;
