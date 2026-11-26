@@ -144,3 +144,34 @@ test("failed interaction check revokes approval and cannot be inherited by a new
   assert.equal(repo.checks(p.id, next.id).length, 0);
   db.close();
 });
+
+test("multi-page prototype evidence budgets escaped JSON and retains every page identity", async () => {
+  const { boundedPrototypeEvidence } =
+    await import("../src/agent/prototype-generator.js");
+  const pages = Array.from({ length: 24 }, (_, i) => ({
+    id: `page-${i}`,
+    title: `Module ${i}`,
+    url: `https://example.com/${i}`,
+    html: '<div style="color:red">'.repeat(4000),
+    text: "text".repeat(10000),
+    structure: '\\"'.repeat(20000),
+    captureNotes: ["note".repeat(20000)],
+  }));
+  const context = boundedPrototypeEvidence("报告".repeat(20000), pages);
+  assert.ok(context.length <= 24000);
+  assert.equal(JSON.parse(context).pages.length, 24);
+  assert.equal(JSON.parse(context).pages[23].id, "page-23");
+  const prompt = prototypePrompt(
+    {
+      ...pages[0],
+      structure: pages[0].structure.slice(0, 2000),
+      text: "summary",
+      actions: [],
+    },
+    undefined,
+    undefined,
+    undefined,
+    context,
+  );
+  assert.ok(prompt.length <= 50000);
+});

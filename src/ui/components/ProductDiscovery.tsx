@@ -200,6 +200,25 @@ export function ProductDiscovery({
       )}
       {state.run && (
         <section className="notice">
+          {state.run.prototypeError && (
+            <div className="error" role="alert">
+              <strong>原型生成失败</strong>
+              <p>原因：{state.run.prototypeError}</p>
+              <button
+                disabled={busy || running}
+                onClick={() =>
+                  void act(() =>
+                    desktop().discovery.generateCandidate(
+                      projectId,
+                      state.run!.id,
+                    ),
+                  )
+                }
+              >
+                重试生成原型（无需重新探索）
+              </button>
+            </div>
+          )}
           <OverviewProgress
             run={state.run}
             exportPage={(id) =>
@@ -293,24 +312,6 @@ export function ProductDiscovery({
             <button onClick={() => onPrototype(state.run!.prototypeVersionId!)}>
               查看本轮原型
             </button>
-          )}
-          {state.run.prototypeError && (
-            <div role="alert">
-              <p>原型生成未完成：{state.run.prototypeError}</p>
-              <button
-                disabled={busy || running}
-                onClick={() =>
-                  void act(() =>
-                    desktop().discovery.generateCandidate(
-                      projectId,
-                      state.run!.id,
-                    ),
-                  )
-                }
-              >
-                重试生成原型
-              </button>
-            </div>
           )}
           {!state.run.prototypeVersionId &&
             !state.run.prototypeError &&

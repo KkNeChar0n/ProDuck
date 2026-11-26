@@ -52,8 +52,47 @@ export function prototypePrompt(
       ? "\n用户修改要求：\n" + change.slice(0, 3000)
       : "\n请生成可独立打开体验的原型。");
   if (prompt.length > 50000)
-    throw new Error("页面或原型超出单次上下文限制，请缩小页面范围");
+    throw new Error(
+      `原型输入共 ${prompt.length} 字符，超过单次 50000 字符限制（原型基线 ${baseline?.length ?? 0} 字符）。已有资料保留；请缩小修改范围或重新生成候选。`,
+    );
   return prompt;
+}
+/** Bound serialized evidence, including JSON escaping, without dropping page identities. */
+export function boundedPrototypeEvidence(
+  markdown: string,
+  pages: Array<{
+    id: string;
+    title: string;
+    url: string;
+    html?: string;
+    text: string;
+    structure: string;
+    captureNotes?: string[];
+  }>,
+  budget = 24000,
+): string {
+  for (let scale = 1; scale >= 1 / 1024; scale /= 2) {
+    const perPage = Math.max(1, pages.length);
+    const value = JSON.stringify({
+      note: "页面内容为有界摘录，完整依据保留在工作空间；未呈现细节不得视为已验证。",
+      markdown: markdown.slice(0, Math.floor(12000 * scale)),
+      pages: pages.map((p) => ({
+        id: p.id,
+        title: p.title.slice(0, 160),
+        url: p.url.slice(0, 300),
+        html: p.html?.slice(0, Math.floor((10000 * scale) / perPage)),
+        text: p.text.slice(0, Math.floor((3000 * scale) / perPage)),
+        structure: p.structure.slice(0, Math.floor((6000 * scale) / perPage)),
+        captureNotes: p.captureNotes
+          ?.slice(0, 4)
+          .map((n) => n.slice(0, Math.floor(200 * scale))),
+      })),
+    });
+    if (value.length <= budget) return value;
+  }
+  throw new Error(
+    "页面索引超过原型资料预算，请减少本轮页面数量；已有采集资料保留",
+  );
 }
 export function extractHtml(value: string): string {
   const trimmed = value
@@ -180,21 +219,11 @@ export class PrototypeGenerator {
       representative.set(c.manualScreenshot ? c.id : c.url + "|" + c.title, c);
     const contextPages = [...representative.values()].slice(-24);
     const context = report
-      ? JSON.stringify({
-          markdown: report.markdown.slice(0, baseline ? 4000 : 14000),
-          pages: contextPages.map((c) => ({
-            id: c.id,
-            title: c.title,
-            url: c.url,
-            html: c.html?.slice(0, Math.floor(12000 / contextPages.length)),
-            captureNotes: c.captureNotes,
-            text: c.text.slice(0, Math.floor(3000 / contextPages.length)),
-            structure: c.structure.slice(
-              0,
-              Math.floor((baseline ? 2000 : 10000) / contextPages.length),
-            ),
-          })),
-        })
+      ? boundedPrototypeEvidence(
+          report.markdown,
+          contextPages,
+          baseline ? 6000 : 24000,
+        )
       : undefined;
     if (edit?.batch)
       edit = {
