@@ -272,7 +272,7 @@ test("automatic discovery combines handoff evidence, preserves cancellation and 
     assert(prompt.includes("证书自动化"));
     if (prompt.startsWith("PRODUCK_DISCOVERY_STEP")) {
       stepCalls++;
-      if (stepCalls === 1) throw new Error("模拟断网");
+      if (stepCalls === 1) throw new Error("模拟鉴权失败");
       return JSON.stringify({
         observation: "客户模块包含筛选",
         action: { kind: "finish", reason: "已观察列表" },
@@ -411,7 +411,7 @@ test("business actions are not replayed after a paused task resumes", async () =
     if (prompt.startsWith("PRODUCK_DISCOVERY_REPORT"))
       return JSON.stringify(output(service.state(p.id).run!));
     decisions++;
-    if (decisions === 2) throw new Error("模拟断网");
+    if (decisions === 2) throw new Error("模拟鉴权失败");
     return JSON.stringify({
       observation: "业务操作",
       action:
@@ -549,7 +549,7 @@ test("no-dispatch validation permits later submission; persisted intent blocks a
     if (prompt.startsWith("PRODUCK_DISCOVERY_REPORT"))
       return JSON.stringify(output(service.state(p.id).run!));
     decisions++;
-    if (decisions === 3) throw new Error("模拟断网");
+    if (decisions === 3) throw new Error("模拟鉴权失败");
     return JSON.stringify({
       observation: "表单",
       action:
@@ -870,4 +870,53 @@ test("long discovery contexts stay bounded across planning, module summary and f
   assert(sizes.length >= 3);
   await service.close();
   db.close();
+});
+
+test("discovery recovers malformed model output in the same captured step", async () => {
+  const { db, projects, p } = fixture();
+  let calls = 0;
+  let service: DiscoveryService;
+  service = new DiscoveryService(
+    projects,
+    {
+      open: async () => {},
+      begin: async () => page.url,
+      observe: async () => ({ ...page, png: new Uint8Array([1]) }),
+      action: async () => {
+        assert.fail("finish must not dispatch an action");
+      },
+      manual: async () => {},
+      close: () => {},
+    },
+    async (_scope, prompt) => {
+      if (prompt.startsWith("PRODUCK_DISCOVERY_MODULE"))
+        return moduleReply(prompt);
+      if (prompt.startsWith("PRODUCK_DISCOVERY_REPORT"))
+        return JSON.stringify(output(service.state(p.id).run!));
+      if (++calls === 1) return "broken JSON";
+      return JSON.stringify({
+        observation: "已观察",
+        action: { kind: "finish", reason: "无可用测试数据" },
+      });
+    },
+  );
+  try {
+    await service.start(p.id, "观察", 2);
+    for (
+      let i = 0;
+      i < 400 && service.state(p.id).run?.state === "running";
+      i++
+    )
+      await new Promise((r) => setTimeout(r, 10));
+    const run = service.state(p.id).run!;
+    assert.equal(run.state, "draft");
+    assert.equal(run.retries?.length, 1);
+    assert.equal(run.retries?.[0].attempt, 1);
+    assert.equal(run.captureIds.length, 2);
+    assert.equal(calls, 3);
+    assert.equal(run.stopReason, "无可用测试数据");
+  } finally {
+    await service.close();
+    db.close();
+  }
 });

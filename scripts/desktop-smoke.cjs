@@ -17,7 +17,7 @@ let server,
   platformCredentialRef,
   yunxiaoCredentialRef,
   discoveryCalls = 0,
-  interruptDiscoveryOnce = true,
+  discoveryFailures = 0,
   browserConfirmations = 0,
   plannerCalls = 0,
   builtinCalls = 0,
@@ -374,8 +374,8 @@ const wait = async (w, expression, timeoutMs = 10000) => {
         } else if (
           data.messages[0].content.startsWith("PRODUCK_DISCOVERY_STEP")
         ) {
-          if (discoveryCalls === 2 && interruptDiscoveryOnce) {
-            interruptDiscoveryOnce = false;
+          if (discoveryCalls === 2 && discoveryFailures < 4) {
+            discoveryFailures++;
             res.end("data: [DONE]\n\n");
             return;
           }
@@ -1460,6 +1460,8 @@ const wait = async (w, expression, timeoutMs = 10000) => {
     `window.produck.discovery.state(${JSON.stringify(firstRelease.id)})`,
   );
   assert.equal(pausedDiscovery.reports.length, 0);
+  assert.equal(pausedDiscovery.run.retries.length, 3);
+  assert(pausedDiscovery.run.message.includes("自动重试 3 次后仍失败"));
   assert(pausedDiscovery.run.modules.some((m) => m.markdown));
   await wc.executeJavaScript(
     `{const e=document.querySelector('[aria-label="探索步数"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,'60');e.dispatchEvent(new Event('input',{bubbles:true}));}`,

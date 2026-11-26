@@ -93,6 +93,8 @@ export interface DiscoveryModule {
   error?: string;
 }
 export interface DiscoveryRun {
+  stopReason?: string;
+  retries?: { at: string; stage: string; attempt: number; error: string }[];
   modules?: DiscoveryModule[];
   activeModule?: string;
   id: string;

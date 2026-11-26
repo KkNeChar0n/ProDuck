@@ -190,6 +190,25 @@ export function ProductDiscovery({ projectId }: { projectId: string }) {
           <DiscoveryProgress run={state.run} />
           <p role="status">
             <strong>{state.run.message}</strong>
+            {state.run.stopReason && (
+              <p>
+                模型结束本轮的原因：{state.run.stopReason}
+                （步数是上限，不代表必须跑满。）
+              </p>
+            )}
+            {!!state.run.retries?.length && (
+              <details>
+                <summary>
+                  自动重试记录（最近 {state.run.retries.length} 次）
+                </summary>
+                {state.run.retries.map((r, i) => (
+                  <p key={i}>
+                    {new Date(r.at).toLocaleTimeString()} · {r.stage} · 重试{" "}
+                    {r.attempt}/3：{r.error}
+                  </p>
+                ))}
+              </details>
+            )}
           </p>
           {state.run.reportId && (
             <button
