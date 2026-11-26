@@ -110,7 +110,27 @@ export interface DiscoveryFeature {
   evidenceIds: string[];
   sourceIds: string[];
 }
+export interface PagePaintTask {
+  baselineId?: string;
+  id: string;
+  key: string;
+  captureId: string;
+  title: string;
+  module: string;
+  state: "pending" | "running" | "done" | "failed";
+  versionId?: string;
+  error?: string;
+  parts: {
+    id: string;
+    input: string;
+    outputPath?: string;
+    depth?: number;
+    state: "pending" | "running" | "done" | "failed";
+    error?: string;
+  }[];
+}
 export interface DiscoveryRun {
+  pageTasks?: PagePaintTask[];
   roundSteps?: number;
   phase?: "collecting" | "summarizing" | "generating" | "ready";
   prototypeVersionId?: string;
@@ -190,7 +210,11 @@ export interface DiscoveryBridge {
       captureId?: string;
     }[],
   ): Promise<DiscoveryRun>;
-  generateCandidate(id: string, runId: string): Promise<DiscoveryRun>;
+  generateCandidate(
+    id: string,
+    runId: string,
+    pageId?: string,
+  ): Promise<DiscoveryRun>;
   supplement(
     id: string,
     runId: string,

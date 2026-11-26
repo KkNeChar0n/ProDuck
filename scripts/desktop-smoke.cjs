@@ -321,6 +321,7 @@ const wait = async (w, expression, timeoutMs = 10000) => {
     0,
   );
   let failBatchOnce = true;
+  let failPageRegionOnce = true;
   server = createServer((req, res) => {
     if (req.method === "GET" && req.url === "/v1/models") {
       assert.equal(req.headers.authorization, "Bearer synthetic-desktop-token");
@@ -368,6 +369,12 @@ const wait = async (w, expression, timeoutMs = 10000) => {
           : data.messages[0].content.includes("Markdown PRD")
             ? "# 客户管理 PRD\n\n## 目标\n支持筛选和新增客户。\n\n## 待确认\n权限规则待确认。"
             : "模型流式响应已验证";
+        if (
+          data.messages[0].content.startsWith("PRODUCK_PAGE_REGION") &&
+          failPageRegionOnce
+        ) {
+          content = "fixture: incomplete page response";
+        }
         if (data.messages[0].content.includes("MEMORY_CONTEXT_TEST")) {
           assert(data.messages[0].content.includes("人工核对"));
           assert(data.messages[0].content.includes("理解版本："));
@@ -1491,6 +1498,9 @@ const wait = async (w, expression, timeoutMs = 10000) => {
     `(async()=>{const s=await window.produck.discovery.state(${JSON.stringify(firstRelease.id)});return s.run?.state==='paused'})()`,
     60000,
   );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('[role=tab]')).find(b=>b.textContent==='理解产品').click()`,
+  );
   await wait(
     window,
     `Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='继续探索' && !b.disabled)`,
@@ -1508,11 +1518,51 @@ const wait = async (w, expression, timeoutMs = 10000) => {
   assert.equal(pausedDiscovery.run.retries.length, 3);
   assert(pausedDiscovery.run.message.includes("自动重试 3 次后仍失败"));
   assert(pausedDiscovery.run.modules.some((m) => m.markdown));
+  assert(pausedDiscovery.run.pageTasks.some((p) => p.state === "failed"));
+  failPageRegionOnce = false;
+  await wait(
+    window,
+    `Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='重试此页'&&!b.disabled)`,
+  );
+  assert(
+    await wc.executeJavaScript(
+      `document.querySelector('[aria-label="逐页绘制任务"]').textContent.includes('模型输出缺少 HTML 文档')`,
+    ),
+  );
+  await wc.executeJavaScript(
+    `document.querySelector('[aria-label="逐页绘制任务"]').scrollIntoView({block:'start',behavior:'instant'});new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`,
+  );
+  writeFileSync(
+    "docs/verification/desktop-page-paint-retry.png",
+    (await wc.capturePage()).toPNG(),
+  );
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='重试此页').click()`,
+  );
+  await wait(
+    window,
+    `(async()=>{const s=await window.produck.discovery.state(${JSON.stringify(firstRelease.id)});return s.run.pageTasks.every(p=>p.state==='done')&&s.run.phase==='ready'})()`,
+    60000,
+  );
+  await new Promise((r) => setTimeout(r, 1800));
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('[role=tab]')).find(b=>b.textContent==='理解产品').click()`,
+  );
+
   await wc.executeJavaScript(
     `{const e=document.querySelector('[aria-label="探索步数"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,'20');e.dispatchEvent(new Event('input',{bubbles:true}));}`,
   );
   await wc.executeJavaScript(
     `Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='继续探索').click()`,
+  );
+  await wait(
+    window,
+    `(async()=>{const s=await window.produck.discovery.state(${JSON.stringify(firstRelease.id)});return s.run.phase==='ready'&&!!s.run.reportId})()`,
+    60000,
+  );
+  await new Promise((r) => setTimeout(r, 1800));
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('[role=tab]')).find(b=>b.textContent==='理解产品').click()`,
   );
   await wait(
     window,
@@ -1630,6 +1680,9 @@ const wait = async (w, expression, timeoutMs = 10000) => {
     `window.produck.discovery.state(${JSON.stringify(nextRelease)})`,
   );
   assert.equal(isolatedUnderstanding.activeReportId, activeUnderstanding.id);
+  await wc.executeJavaScript(
+    `Array.from(document.querySelectorAll('[role=tab]')).find(b=>b.textContent==='理解产品').click()`,
+  );
   await wc.executeJavaScript(
     `Array.from(document.querySelectorAll('[role=tab]')).find(b=>b.textContent==='理解产品').click()`,
   );
@@ -1755,11 +1808,18 @@ const wait = async (w, expression, timeoutMs = 10000) => {
   const pastedVersions = await wc.executeJavaScript(
     `window.produck.workbench.versions(${JSON.stringify(firstRelease.id)})`,
   );
-  assert.equal(
-    pastedVersions.find((v) => v.id === pasted.run.prototypeVersionId)
-      .baselineId,
-    beforeSupplement.run.prototypeVersionId,
-  );
+  {
+    const lineage = new Set();
+    let current = pasted.run.prototypeVersionId;
+    while (current && !lineage.has(current)) {
+      lineage.add(current);
+      current = pastedVersions.find((v) => v.id === current)?.baselineId;
+    }
+    assert(
+      lineage.has(beforeSupplement.run.prototypeVersionId),
+      "supplement must descend from the existing page prototype",
+    );
+  }
   await wc.executeJavaScript(
     `Array.from(document.querySelectorAll('[role="tab"]')).find(b=>b.textContent==='理解产品').click()`,
   );

@@ -103,6 +103,7 @@ export interface PrototypeEdit {
   state?: PreviewState;
 }
 export interface PrototypeDetails {
+  page?: { taskId: string; title: string; module: string };
   understanding?: { id: string; digest: string; draft?: boolean };
   coverage?: {
     captureId: string;

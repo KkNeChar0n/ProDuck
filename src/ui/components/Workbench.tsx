@@ -1,3 +1,4 @@
+import { PagePaintProgress } from "./PagePaintProgress";
 import type { BrowserSupplement } from "./SupplementPanel";
 import { ProductDiscovery } from "./ProductDiscovery";
 import { PrototypeChecks } from "./PrototypeChecks";
@@ -144,6 +145,51 @@ export function Workbench({
       unsubscribe();
       void desktop().workbench.hide();
       onContext(null);
+    };
+  }, [projectId]);
+  useEffect(() => {
+    let alive = true,
+      loading = false,
+      observed = false,
+      openedRun = "";
+    const known = new Set<string>();
+    const poll = async () => {
+      if (loading) return;
+      loading = true;
+      try {
+        const state = await desktop().discovery.state(projectId);
+        const completed = (state.run?.pageTasks ?? []).filter(
+          (p) => p.versionId,
+        );
+        const fresh = completed
+          .filter((p) => !known.has(`${p.id}:${p.versionId}`))
+          .at(-1);
+        if (!observed && completed.length) openedRun = state.run?.id ?? "";
+        completed.forEach((p) => known.add(`${p.id}:${p.versionId}`));
+        if (observed && fresh && alive) {
+          const list = await desktop().workbench.versions(projectId);
+          if (alive) {
+            setVersions(list);
+            if (openedRun !== state.run?.id) {
+              openedRun = state.run?.id ?? "";
+              setSelected(fresh.versionId!);
+              setTab((current) =>
+                current === "discovery" ? "prototype" : current,
+              );
+            }
+          }
+        }
+        observed = true;
+      } catch {
+      } finally {
+        loading = false;
+      }
+    };
+    void poll();
+    const timer = setInterval(() => void poll(), 1500);
+    return () => {
+      alive = false;
+      clearInterval(timer);
     };
   }, [projectId]);
   useEffect(() => {
@@ -437,6 +483,15 @@ export function Workbench({
                 {current?.approved ? "此版本已通过" : "通过此版本"}
               </button>
             </div>
+          )}
+          {tab === "prototype" && (
+            <PagePaintProgress
+              projectId={projectId}
+              onOpen={(id) => {
+                void desktop().workbench.versions(projectId).then(setVersions);
+                setSelected(id);
+              }}
+            />
           )}
           {tab === "prototype" && selected && (
             <div className="canvas-tools">

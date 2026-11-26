@@ -105,6 +105,12 @@ export class DiscoveryService {
       run: DiscoveryRun,
       signal: AbortSignal,
     ) => Promise<string>,
+    private onCapture?: (
+      scope: string,
+      run: DiscoveryRun,
+      captureId: string,
+      signal: AbortSignal,
+    ) => Promise<void>,
   ) {
     this.memory = new UnderstandingRepository(projects);
   }
@@ -112,6 +118,24 @@ export class DiscoveryService {
     const project = this.projects.shared(scope);
     const runs = this.memory.runs(scope);
     for (const run of runs) {
+      if (
+        this.active.get(project.id)?.runId !== run.id &&
+        run.pageTasks?.some((p) => p.state === "running")
+      ) {
+        for (const page of run.pageTasks)
+          if (page.state === "running") {
+            page.state = "failed";
+            page.error = "应用中断，已完成区域保留，可重试此页";
+            for (const part of page.parts)
+              if (part.state === "running") {
+                part.state = "failed";
+                part.error = page.error;
+              }
+          }
+        run.prototypeError = "页面绘制中断，请在页面目录重试";
+        this.memory.saveRun(scope, run);
+      }
+
       if (
         run.phase === "generating" &&
         this.active.get(project.id)?.runId !== run.id
@@ -230,6 +254,10 @@ export class DiscoveryService {
     this.memory.get(scope, previous.id, previous.digest);
     const run: DiscoveryRun = {
       ...structuredClone(parent),
+      pageTasks:
+        parent.releaseId === scope
+          ? structuredClone(parent.pageTasks)
+          : undefined,
       mode: mode ?? parent.mode,
       phase: "collecting",
       roundSteps: 0,
@@ -415,6 +443,18 @@ export class DiscoveryService {
                 ...notes,
               ]),
             ].slice(0, 12);
+          }
+          if (run.mode === "overview" && this.onCapture) {
+            run.message = `正在绘制页面：${page.title}，完成后继续探索`;
+            save();
+            try {
+              await this.onCapture(scope, run, capture.id, signal);
+            } catch (error) {
+              signal.throwIfAborted();
+              run.prototypeError =
+                error instanceof Error ? error.message : "页面绘制失败";
+            }
+            save();
           }
           run.activeModule = step.module;
           if (previousModule && previousModule !== step.module) {
@@ -734,14 +774,15 @@ export class DiscoveryService {
     run: DiscoveryRun,
     signal: AbortSignal,
   ) {
-    if (!this.onReady || !run.reportId) return;
+    if (!this.onReady || (!run.reportId && !this.onCapture)) return;
     run.phase = "generating";
     run.prototypeError = undefined;
     run.message =
-      "页面采集与整理已结束，正在生成原型候选；补充列表保留在理解产品中";
+      "正在完成页面绘制任务；已完成页面可在原型页查看，补充列表保留在理解产品中";
     this.memory.saveRun(scope, run);
     try {
       run.prototypeVersionId = await this.onReady(scope, run, signal);
+      signal.throwIfAborted();
       run.phase = "ready";
       run.message =
         "原型已生成，可在原型页体验；缺失内容可在理解产品中粘贴截图后提交补充";
@@ -753,17 +794,43 @@ export class DiscoveryService {
     }
     this.memory.saveRun(scope, run);
   }
-  async generateCandidate(scope: string, runId: string) {
+  async generateCandidate(scope: string, runId: string, pageId?: string) {
     const project = this.projects.shared(scope);
     if (this.active.has(project.id)) throw new Error("当前任务尚未结束");
     const run = this.memory.run(scope, runId);
     if (run.releaseId !== scope)
       throw new Error("请切换到本轮所属版本再生成原型");
-    if (!run.reportId) throw new Error("请先完成页面整理");
+    if (!run.reportId && !this.onCapture) throw new Error("请先完成页面整理");
+    const page = pageId
+      ? run.pageTasks?.find((p) => p.id === pageId)
+      : undefined;
+    if (pageId && (!page || !this.onCapture))
+      throw new Error("页面任务不属于当前轮次");
     const controller = new AbortController();
     const entry = { controller, runId: run.id, task: Promise.resolve() };
     this.active.set(project.id, entry);
-    entry.task = this.renderCandidate(scope, run, controller.signal);
+    entry.task = page
+      ? (async () => {
+          run.phase = "generating";
+          this.memory.saveRun(scope, run);
+          try {
+            await this.onCapture!(
+              scope,
+              run,
+              page.captureId,
+              controller.signal,
+            );
+          } catch (e) {
+            run.prototypeError =
+              e instanceof Error ? e.message : "页面绘制失败";
+          } finally {
+            run.phase = "ready";
+            if (!run.pageTasks?.some((p) => p.state !== "done"))
+              run.prototypeError = undefined;
+            this.memory.saveRun(scope, run);
+          }
+        })()
+      : this.renderCandidate(scope, run, controller.signal);
     try {
       await entry.task;
       return run;

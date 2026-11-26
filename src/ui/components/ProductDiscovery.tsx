@@ -1,3 +1,4 @@
+import { PagePaintProgress } from "./PagePaintProgress";
 import { SupplementPanel, type BrowserSupplement } from "./SupplementPanel";
 import { OverviewProgress } from "./OverviewProgress";
 import { useEffect, useRef, useState } from "react";
@@ -104,8 +105,7 @@ export function ProductDiscovery({
     <article className="paper discovery">
       <h2>让 Agent 理解产品</h2>
       <p className="muted">
-        打开独立 Chrome → 登录 → 了解模块并采集页面 → 补图与审核 → 绘制原型 /
-        写文档
+        打开独立 Chrome → 登录 → 逐页采集并绘制 → 补图与审核 → 写文档
       </p>
       <p>
         每个项目保留独立登录状态。可先在「交接资料」导入已有文档，Agent
@@ -134,7 +134,7 @@ export function ProductDiscovery({
         <button disabled={busy || running}>打开独立 Chrome</button>
       </form>
       <p className="muted">
-        「重新探索」会从0步开始建立新一轮；旧资料与原型保留。采集和整理结束后自动生成候选原型，永久记忆仍需单独审核。
+        「重新探索」会从0步开始建立新一轮；旧资料与原型保留。每采集一个页面就绘制该页，复杂页面自动拆成区域任务，永久记忆仍需单独审核。
       </p>
       <label>
         本轮关注范围（可选）
@@ -186,7 +186,7 @@ export function ProductDiscovery({
         )}
       </div>
       <p className="muted" id="discovery-budget-help">
-        默认最多16个页面状态，可选2–30；每模块通常只看1个代表页面，必要时补1个关键弹窗。主要模块信息足够后即可整理并生成原型，不必跑满步数。继续探索只补充缺失页面，历史记录会复用。
+        默认最多16个页面状态，可选2–30；每模块通常只看1个代表页面，必要时补1个关键弹窗。每页采集后立即绘制，主要模块信息足够后即可整理结束，不必跑满步数。继续探索只补充缺失页面，历史记录会复用。
       </p>
       <p className="muted">
         Agent
@@ -219,6 +219,7 @@ export function ProductDiscovery({
               </button>
             </div>
           )}
+          <PagePaintProgress projectId={projectId} onOpen={onPrototype} />
           <OverviewProgress
             run={state.run}
             exportPage={(id) =>
@@ -436,13 +437,14 @@ export function ProductDiscovery({
                         );
                       await refresh();
                       setNotice(
-                        "理解已保存为长期记忆，正在生成统一原型；生成失败也可保留记忆并重试。",
+                        "理解已保存为长期记忆，正在打开对应页面原型；失败时记忆仍保留。",
                       );
-                      await desktop().discovery.generate(
+                      const version = await desktop().discovery.generate(
                         projectId,
                         report.id,
                         report.digest,
                       );
+                      onPrototype(version.id);
                     })
                   }
                 >

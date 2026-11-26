@@ -187,6 +187,12 @@ export class PrototypeRepository {
   restore(projectId: string, id: string): PrototypeVersion {
     const v = this.list(projectId).find((v) => v.id === id);
     if (!v) throw new Error("原型不存在");
-    return this.create(projectId, this.read(projectId, id), v.sourceRefs, id);
+    return this.create(
+      projectId,
+      this.read(projectId, id),
+      v.sourceRefs,
+      id,
+      this.details(projectId, id) ?? undefined,
+    );
   }
 }

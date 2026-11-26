@@ -205,8 +205,14 @@ export class PrototypeGenerator {
         )
       : null;
     if (reference) edit = { ...edit, understanding: reference };
+    const page = baselineId
+      ? this.prototypes.details(projectId, baselineId)?.page
+      : undefined;
     const sourceIds =
-      report?.captureIds ??
+      (page && baselineId
+        ? this.prototypes.list(projectId).find((v) => v.id === baselineId)!
+            .sourceRefs
+        : report?.captureIds) ??
       (baselineId
         ? this.prototypes.list(projectId).find((v) => v.id === baselineId)!
             .sourceRefs
@@ -324,6 +330,7 @@ export class PrototypeGenerator {
         sourceIds,
         baselineId ?? null,
         {
+          page,
           understanding: reference,
           coverage: evidence.map((c) => ({
             captureId: c.id,

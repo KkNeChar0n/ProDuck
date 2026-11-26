@@ -1,3 +1,5 @@
+import { PagePainter } from "../prototypes/page-painter.js";
+import { streamModel } from "../agent/model-client.js";
 import { latestDescendant } from "../prototypes/lineage.js";
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -52,6 +54,35 @@ export function registerWorkbenchIpc(
     preview = new PrototypeSurface(getWindow),
     versions = new PrototypeRepository(db, projects),
     generator = new PrototypeGenerator(db, projects, models, versions);
+  const painter = new PagePainter(
+    projects,
+    versions,
+    async (prompt, signal, capture, scope) => {
+      const input = await models.request(scope, prompt, signal);
+      input.maxTokens = 8192;
+      if (capture.manualScreenshot) {
+        if (models.capabilities(scope)?.image !== "supported")
+          throw new Error("请先在项目模型设置测试图像能力，再补充截图");
+        input.images = [
+          {
+            mediaType: "image/png",
+            base64: readFileSync(
+              projectPath(
+                projects.shared(scope).workspace,
+                capture.screenshotPath,
+              ),
+            ).toString("base64"),
+          },
+        ];
+      }
+      let html = "";
+      for await (const chunk of streamModel(input)) {
+        html += chunk;
+        if (html.length > 1000000) throw new Error("区域输出超过大小限制");
+      }
+      return html;
+    },
+  );
   const discovery = new DiscoveryService(
     projects,
     new ChromeDiscoveryBrowser(
@@ -73,34 +104,63 @@ export function registerWorkbenchIpc(
     ),
     discoveryModel(models),
     async (scope, run, signal) => {
-      const report = discovery.memory.get(scope, run.reportId!);
-      const version = await generator.generate(
-        scope,
-        report.captureIds[0],
-        (event) => {
-          const win = getWindow();
-          if (win && !win.isDestroyed())
-            win.webContents.send("prototypes:progress", event);
-        },
-        run.prototypeVersionId
-          ? "根据用户逐项补充的页面与截图完善当前原型，保留无关模块和现有交互"
-          : "根据本轮产品理解和页面资料生成可操作候选原型。尚缺内容标为待补充，不伪造已确认规则",
-        run.prototypeVersionId
-          ? latestDescendant(versions.list(scope), run.prototypeVersionId)
-          : undefined,
-        {
-          understanding: { id: report.id, digest: report.digest, draft: true },
-        },
-        signal,
+      const failures: string[] = [];
+      for (const captureId of run.captureIds) {
+        signal.throwIfAborted();
+        try {
+          await painter.paint(scope, run, captureId, signal, () =>
+            discovery.memory.saveRun(scope, run),
+          );
+        } catch (e) {
+          signal.throwIfAborted();
+          failures.push(e instanceof Error ? e.message : "页面绘制失败");
+        }
+      }
+      if (failures.length)
+        throw new Error(
+          `${failures.length} 个页面未完成：${failures[0]}。重试将复用已完成区域。`,
+        );
+      if (run.reportId) {
+        const report = discovery.memory.get(scope, run.reportId);
+        for (const task of run.pageTasks ?? []) {
+          if (!task.versionId) continue;
+          const latest = latestDescendant(versions.list(scope), task.versionId);
+          const details = versions.details(scope, latest);
+          if (details?.understanding?.id === report.id) continue;
+          const v = versions.list(scope).find((v) => v.id === latest)!;
+          const next = versions.create(
+            scope,
+            versions.read(scope, latest),
+            v.sourceRefs,
+            latest,
+            {
+              ...details!,
+              understanding: {
+                id: report.id,
+                digest: report.digest,
+                draft: true,
+              },
+            },
+          );
+          task.versionId = next.id;
+          run.prototypeVersionId = next.id;
+        }
+        discovery.memory.saveRun(scope, run);
+      }
+      if (!run.prototypeVersionId) throw new Error("尚无可绘制页面");
+      return run.prototypeVersionId;
+    },
+    async (scope, run, captureId, signal) => {
+      await painter.paint(scope, run, captureId, signal, () =>
+        discovery.memory.saveRun(scope, run),
       );
-      return version.id;
     },
   );
   ipcMain.handle(
     "discovery:generate-candidate",
-    (e, id: string, runId: string) => {
+    (e, id: string, runId: string, pageId?: string) => {
       trusted(e, id);
-      return discovery.generateCandidate(id, runId);
+      return discovery.generateCandidate(id, runId, pageId);
     },
   );
   ipcMain.handle(
@@ -267,6 +327,26 @@ export function registerWorkbenchIpc(
     (e, id: string, reportId: string, digest: string) => {
       trusted(e, id);
       const report = discovery.memory.get(id, reportId, digest, true);
+      const run = discovery.memory.run(id, report.runId);
+      if (run.pageTasks?.length) {
+        const task = run.pageTasks.find(
+          (p) => p.state === "done" && p.versionId,
+        );
+        if (!task?.versionId) throw new Error("请先重试页面绘制");
+        const latest = latestDescendant(versions.list(id), task.versionId);
+        const v = versions.list(id).find((v) => v.id === latest)!;
+        return versions.create(
+          id,
+          versions.read(id, latest),
+          v.sourceRefs,
+          latest,
+          {
+            ...versions.details(id, latest)!,
+            understanding: { id: report.id, digest: report.digest },
+          },
+        );
+      }
+
       return generator.generate(
         id,
         report.captureIds[0],

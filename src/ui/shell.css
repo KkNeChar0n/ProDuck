@@ -1259,3 +1259,28 @@ dialog::backdrop {
   max-height: 240px;
   object-fit: contain;
 }
+
+.page-paint-progress {
+  padding: 12px;
+  border: 1px solid #dddccf;
+  border-radius: 10px;
+  background: #faf8f0;
+}
+.page-paint-list {
+  display: flex;
+  gap: 10px;
+  overflow: auto;
+  max-height: 220px;
+}
+.page-paint-item {
+  flex: 0 0 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid #dddccf;
+  border-radius: 8px;
+}
+.page-paint-item p {
+  overflow-wrap: anywhere;
+}

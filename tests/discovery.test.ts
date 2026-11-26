@@ -1198,3 +1198,72 @@ test("overview auto candidate waits for summary; supplements keep identity, base
     db.close();
   }
 });
+
+test("incremental overview paints each observation before the next browser action and before report", async () => {
+  const { db, projects, p } = fixture();
+  let service: DiscoveryService;
+  const order: string[] = [];
+  let decisions = 0;
+  service = new DiscoveryService(
+    projects,
+    {
+      open: async () => {},
+      begin: async () => page.url,
+      observe: async () => {
+        order.push("observe");
+        return { ...page, png: new Uint8Array([1]) };
+      },
+      action: async () => {
+        order.push("action");
+      },
+      manual: async () => {},
+      close: () => {},
+    },
+    async (_id, prompt) => {
+      if (prompt.startsWith("PRODUCK_DISCOVERY_MODULE"))
+        return moduleReply(prompt);
+      if (prompt.startsWith("PRODUCK_DISCOVERY_REPORT")) {
+        order.push("report");
+        return JSON.stringify(output(service.state(p.id).run!));
+      }
+      decisions++;
+      return JSON.stringify({
+        module: "客户",
+        observation: "客户列表",
+        action:
+          decisions === 1
+            ? { kind: "click", index: 0, effect: "read" }
+            : { kind: "finish", reason: "主要页面已了解" },
+      });
+    },
+    async () => {
+      order.push("finalize");
+      return "page-version";
+    },
+    async (_scope, run, captureId) => {
+      assert.equal(run.reportId, undefined);
+      assert(run.captureIds.includes(captureId));
+      order.push("paint");
+    },
+  );
+  try {
+    await service.start(p.id, "了解用途", 16, "overview");
+    for (let i = 0; i < 400; i++) {
+      const r = service.state(p.id).run!;
+      if (r.state !== "running" && r.phase !== "generating") break;
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    assert.deepEqual(order.slice(0, 5), [
+      "observe",
+      "paint",
+      "action",
+      "observe",
+      "paint",
+    ]);
+    assert(order.indexOf("report") > order.lastIndexOf("paint"));
+    assert.equal(order.at(-1), "finalize");
+  } finally {
+    service.close();
+    db.close();
+  }
+});
