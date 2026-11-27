@@ -120,13 +120,17 @@ export function registerWorkbenchIpc(
         throw new Error(
           `${failures.length} 个页面未完成：${failures[0]}。重试将复用已完成区域。`,
         );
+      const paintedVersionId = run.prototypeVersionId;
       if (run.reportId) {
         const report = discovery.memory.get(scope, run.reportId);
         for (const task of run.pageTasks ?? []) {
           if (!task.versionId) continue;
           const latest = latestDescendant(versions.list(scope), task.versionId);
           const details = versions.details(scope, latest);
-          if (details?.understanding?.id === report.id) continue;
+          if (details?.understanding?.id === report.id) {
+            task.versionId = latest;
+            continue;
+          }
           const v = versions.list(scope).find((v) => v.id === latest)!;
           const next = versions.create(
             scope,
@@ -143,8 +147,12 @@ export function registerWorkbenchIpc(
             },
           );
           task.versionId = next.id;
-          run.prototypeVersionId = next.id;
         }
+        if (paintedVersionId)
+          run.prototypeVersionId = latestDescendant(
+            versions.list(scope),
+            paintedVersionId,
+          );
         discovery.memory.saveRun(scope, run);
       }
       if (!run.prototypeVersionId) throw new Error("尚无可绘制页面");
@@ -158,9 +166,9 @@ export function registerWorkbenchIpc(
   );
   ipcMain.handle(
     "discovery:generate-candidate",
-    (e, id: string, runId: string, pageId?: string) => {
+    (e, id: string, runId: string, pageId?: string, redraw?: boolean) => {
       trusted(e, id);
-      return discovery.generateCandidate(id, runId, pageId);
+      return discovery.generateCandidate(id, runId, pageId, redraw);
     },
   );
   ipcMain.handle(

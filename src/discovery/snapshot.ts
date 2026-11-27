@@ -2,7 +2,7 @@
 export const snapshotExpression = String.raw`(() => {
   const gaps = new Set(); let count = 0;
   const skip = new Set(['SCRIPT','STYLE','LINK','META','NOSCRIPT','TEMPLATE','OBJECT','EMBED']);
-  const properties = ['display','position','flex-direction','flex-wrap','align-items','justify-content','gap','grid-template-columns','width','height','max-width','min-height','padding','margin','color','background-color','border','border-radius','font-family','font-size','font-weight','line-height','text-align','box-shadow','overflow'];
+  const properties = ['display','position','top','right','bottom','left','box-sizing','min-width','flex-grow','flex-shrink','flex-basis','order','grid-template-rows','grid-row','grid-column','align-self','justify-self','flex-direction','flex-wrap','align-items','justify-content','gap','grid-template-columns','width','height','max-width','min-height','padding','margin','color','background-color','border','border-radius','font-family','font-size','font-weight','line-height','text-align','box-shadow','overflow'];
   function copy(node, depth=0) {
     if (node.nodeType===3) return document.createTextNode(node.textContent || '');
     if (node.nodeType!==1 || skip.has(node.tagName) || ['password','hidden','file'].includes(node.type)) return null;

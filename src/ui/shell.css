@@ -764,6 +764,9 @@ dialog::backdrop {
   display: none !important;
 }
 @media (min-width: 1500px) {
+  .app.nav-collapsed {
+    grid-template-columns: 0 minmax(500px, 1fr) 360px;
+  }
   .app {
     grid-template-columns: 220px minmax(500px, 1fr) 360px;
   }
@@ -1283,4 +1286,23 @@ dialog::backdrop {
 }
 .page-paint-item p {
   overflow-wrap: anywhere;
+}
+
+.paint-tools {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 10px 0;
+}
+.paint-tools > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.paint-tools > summary span {
+  font-weight: 400;
+  font-size: 12px;
+  margin-left: 10px;
+}
+.paint-tools[open] > summary {
+  margin-bottom: 12px;
 }

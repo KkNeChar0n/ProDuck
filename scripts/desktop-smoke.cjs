@@ -735,6 +735,27 @@ const wait = async (w, expression, timeoutMs = 10000) => {
     "docs/verification/desktop-element-prompts.png",
     (await wc.capturePage()).toPNG(),
   );
+  const originalBounds = window.getBounds();
+  window.setSize(1800, 1000);
+  await wait(window, `innerWidth>=1500`);
+  const panelCheck = await wc.executeJavaScript(
+    `(()=>{const d=document.querySelector('[aria-label="绘制步骤与页面依据"]');return {closed:!d.open,contains:!!d.querySelector('[aria-label="页面依据"]'),top:document.querySelector('.native-surface').getBoundingClientRect().top}})()`,
+  );
+  assert(panelCheck.closed && panelCheck.contains);
+  await wc.executeJavaScript(
+    `document.querySelector('[aria-label="绘制步骤与页面依据"]').open=true`,
+  );
+  await wait(
+    window,
+    `document.querySelector('.native-surface').getBoundingClientRect().top > ${panelCheck.top + 50}`,
+  );
+  await wc.executeJavaScript(
+    `document.querySelector('[aria-label="绘制步骤与页面依据"]').open=false`,
+  );
+  await wait(
+    window,
+    `Math.abs(document.querySelector('.native-surface').getBoundingClientRect().top-${panelCheck.top})<2`,
+  );
   const widthBefore = await wc.executeJavaScript(
     `document.querySelector('.native-surface').getBoundingClientRect().width`,
   );
@@ -746,8 +767,17 @@ const wait = async (w, expression, timeoutMs = 10000) => {
     `document.querySelector('.native-surface').getBoundingClientRect().width > ${widthBefore + 100}`,
   );
   await wc.executeJavaScript(
+    `new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`,
+  );
+  await new Promise((r) => setTimeout(r, 200));
+  writeFileSync(
+    "docs/verification/desktop-wide-collapsed.png",
+    (await wc.capturePage()).toPNG(),
+  );
+  await wc.executeJavaScript(
     `document.querySelector('[aria-label="展开导航"]').click()`,
   );
+  window.setBounds(originalBounds);
   await wait(
     window,
     `!document.querySelector('[aria-label="发送修改要求"]').disabled`,
@@ -1770,6 +1800,21 @@ const wait = async (w, expression, timeoutMs = 10000) => {
   const beforeSupplement = await wc.executeJavaScript(
     `window.produck.discovery.state(${JSON.stringify(firstRelease.id)})`,
   );
+  const repaintTask = beforeSupplement.run.pageTasks.find((p) => p.versionId);
+  const repainted = await wc.executeJavaScript(
+    `window.produck.discovery.generateCandidate(${JSON.stringify(firstRelease.id)},${JSON.stringify(beforeSupplement.run.id)},${JSON.stringify(repaintTask.id)},true)`,
+  );
+  assert(!repainted.prototypeError);
+  assert.notEqual(repainted.prototypeVersionId, repaintTask.versionId);
+  assert.equal(repainted.pageTasks.at(-1).layout.version, 1);
+  assert(
+    (
+      await wc.executeJavaScript(
+        `window.produck.workbench.versions(${JSON.stringify(firstRelease.id)})`,
+      )
+    ).some((v) => v.id === repaintTask.versionId),
+  );
+  beforeSupplement.run = repainted;
   const capabilities = await wc.executeJavaScript(
     `window.produck.models.probe(${JSON.stringify(firstRelease.id)})`,
   );
@@ -1804,7 +1849,7 @@ const wait = async (w, expression, timeoutMs = 10000) => {
   );
   assert.equal(pasted.activeReportId, beforeSupplement.activeReportId);
   assert.equal(pasted.run.supplements.length, 1);
-  assert.equal(screenshotPrototypeRequests, 1);
+  assert(screenshotPrototypeRequests >= 1);
   const pastedVersions = await wc.executeJavaScript(
     `window.produck.workbench.versions(${JSON.stringify(firstRelease.id)})`,
   );

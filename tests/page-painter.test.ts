@@ -1,3 +1,7 @@
+import {
+  planRegions,
+  fillRegionSlots,
+} from "../src/prototypes/region-layout.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -17,7 +21,7 @@ const html = (label: string) =>
   `<!doctype html><html><head><style>button{color:red}</style></head><body><button id="r0_button">${label}</button><script>document.querySelector('button').onclick=()=>document.querySelector('button').textContent='clicked';</script></body></html>`;
 const large = Array.from(
   { length: 40 },
-  (_, i) => `<section><h2>模块${i}</h2><p>${"内容".repeat(300)}</p></section>`,
+  (_, i) => `<section><h2>模块${i}</h2><p>${"内容".repeat(900)}</p></section>`,
 ).join("");
 function setup() {
   const root = mkdtempSync(join(tmpdir(), "produck-paint-"));
@@ -157,7 +161,7 @@ test("truncated region automatically subdivides, cancellation preserves finished
       if (calls === 1) return "<html>incomplete";
       return html("done");
     });
-    const initial = pageRegions(f.capture).length;
+    const initial = planRegions(f.capture).parts.length;
     await painter.paint(
       f.project.id,
       f.run,
@@ -180,6 +184,82 @@ test("truncated region automatically subdivides, cancellation preserves finished
       ),
     );
     assert.equal(next.pageTasks[0].state, "failed");
+  } finally {
+    f.close();
+  }
+});
+
+test("region layout retains shell parents and stable slots through nested splitting", () => {
+  const source = {
+    html: `<html><body><div style="display:flex;flex-direction:row"><aside style="width:220px">菜单</aside><main style="flex:1"><header>工具栏</header><section>${"<p>正文</p>".repeat(30)}</section></main></div></body></html>`,
+    text: "",
+    structure: "",
+  };
+  const plan = planRegions(source, 1000);
+  assert.match(plan.template, /grid-template-columns:220px minmax\(0,1fr\)/);
+  assert.equal(
+    (plan.template.match(/data-produck-slot=/g) || []).length,
+    plan.parts.length,
+  );
+  const html = assembleRegions(
+    "page",
+    plan.parts.map((p, i) => `<html><body><button>${i}</button></body></html>`),
+    { template: plan.template, slotIds: plan.parts.map((p) => p.id) },
+  );
+  assert.match(html, /grid-column:2/);
+  assert.match(html, /data-produck-layout/);
+  const replacement = fillRegionSlots(plan.template, {
+    [plan.parts[0].id]: '<div data-produck-slot="sub"></div>',
+  });
+  assert.match(
+    fillRegionSlots(replacement, { sub: "<b>replacement</b>" }),
+    /replacement/,
+  );
+  assert.throws(
+    () => fillRegionSlots(plan.template, { foreign: "x" }),
+    /不存在/,
+  );
+});
+
+test("redrawing a completed legacy page uses its capture and preserves the old candidate", async () => {
+  const f = setup();
+  try {
+    const painter = new PagePainter(f.projects, f.versions, async () =>
+      html("candidate"),
+    );
+    const first = await painter.paint(
+      f.project.id,
+      f.run,
+      f.capture.id,
+      new AbortController().signal,
+      () => {},
+    );
+    const previous = structuredClone(f.run.pageTasks![0]);
+    f.run.pageTasks!.push({
+      ...previous,
+      id: "redraw",
+      baselineId: first,
+      repaint: true,
+      layout: undefined,
+      parts: [],
+      versionId: undefined,
+      state: "pending",
+    });
+    const next = await painter.paint(
+      f.project.id,
+      f.run,
+      f.capture.id,
+      new AbortController().signal,
+      () => {},
+    );
+    assert.notEqual(first, next);
+    assert.equal(
+      f.versions.list(f.project.id).find((v) => v.id === next)!.baselineId,
+      first,
+    );
+    assert.equal(f.run.pageTasks![0].versionId, first);
+    assert.equal(f.run.pageTasks!.at(-1)!.layout?.version, 1);
+    assert(f.versions.read(f.project.id, first).includes("candidate"));
   } finally {
     f.close();
   }

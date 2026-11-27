@@ -33,8 +33,38 @@ const assert = require("node:assert/strict");
       "rgb(255, 0, 0)",
       "rgb(0, 0, 255)",
     ]);
+    const { planRegions } = await import("../dist/prototypes/region-layout.js");
+    for (const width of [1100, 1800]) {
+      win.setSize(width, 800);
+      const plan = planRegions({
+        html: `<html><body><div><aside style="position:fixed;width:240px;height:800px;background:#234">menu</aside><header style="position:fixed;width:1560px;height:60px">header</header><main style="margin:60px 0 0 240px;width:1560px">workspace</main></div></body></html>`,
+        text: "",
+        structure: "",
+      });
+      const output = assembleRegions(
+        "layout",
+        plan.parts.map(
+          (p) =>
+            `<html><body>${p.input.includes("menu") ? "<button>menu</button>" : p.input.includes("header") ? "<div>header</div>" : "<div>workspace</div>"}</body></html>`,
+        ),
+        { template: plan.template, slotIds: plan.parts.map((p) => p.id) },
+      );
+      await win.loadURL(
+        "data:text/html;charset=utf-8," + encodeURIComponent(output),
+      );
+      const rects = await win.webContents.executeJavaScript(
+        `(()=>{const boxes=[...document.querySelectorAll('[data-produck-slot]')].map(e=>{const r=e.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,right:r.right}});return {boxes,width:innerWidth}})()`,
+      );
+      assert.equal(rects.boxes.length, 3);
+      const [side, header, main] = rects.boxes;
+      assert(Math.abs(side.width - 240) < 2);
+      assert(Math.abs(header.x - side.right) < 2);
+      assert(Math.abs(main.x - header.x) < 2);
+      assert(main.y >= header.y);
+      assert(main.right <= rects.width + 1);
+    }
     console.log(
-      "PASS: assembled regions retain independent styles and working scoped controls",
+      "PASS: region controls/styles and responsive sidebar/header/workspace layout at 1100 and 1800px",
     );
   } finally {
     win.destroy();

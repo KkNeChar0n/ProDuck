@@ -5,9 +5,11 @@ import { latestDescendant } from "../../prototypes/lineage";
 export function PagePaintProgress({
   projectId,
   onOpen,
+  onStatus,
 }: {
   projectId: string;
   onOpen: (id: string) => void;
+  onStatus?: (text: string) => void;
 }) {
   const [run, setRun] = useState<DiscoveryRun | null>(null),
     [error, setError] = useState(""),
@@ -34,6 +36,15 @@ export function PagePaintProgress({
       clearInterval(timer);
     };
   }, [projectId]);
+  useEffect(() => {
+    const tasks = run?.pageTasks ?? [],
+      failed = tasks.filter((p) => p.state === "failed").length;
+    onStatus?.(
+      tasks.length
+        ? `已完成 ${tasks.filter((p) => p.state === "done").length}/${tasks.length} 页${failed ? ` · ${failed} 页失败，展开可重试` : ""}`
+        : "",
+    );
+  }, [run, onStatus]);
   if (!run?.pageTasks?.length) return null;
   const tasks = run.pageTasks,
     done = tasks.filter((p) => p.state === "done").length;
@@ -77,6 +88,33 @@ export function PagePaintProgress({
                 }
               >
                 查看页面原型
+              </button>
+            )}
+            {task.versionId && (
+              <button
+                disabled={
+                  busy || run.state === "running" || run.phase === "generating"
+                }
+                onClick={() => {
+                  setBusy(true);
+                  setError("");
+                  void desktop()
+                    .discovery.generateCandidate(
+                      projectId,
+                      run.id,
+                      task.id,
+                      true,
+                    )
+                    .then((result) => {
+                      setRun(result);
+                      if (result.prototypeVersionId)
+                        onOpen(result.prototypeVersionId);
+                    })
+                    .catch((e) => setError(errorText(e)))
+                    .finally(() => setBusy(false));
+                }}
+              >
+                重新绘制此页
               </button>
             )}
             {task.state === "failed" && (

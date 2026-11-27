@@ -47,6 +47,7 @@ export function Workbench({
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [progress, setProgress] = useState<GenerationProgress | null>(null);
+  const [paintStatus, setPaintStatus] = useState("");
   const [browserSupplement, setBrowserSupplement] =
     useState<BrowserSupplement | null>(null);
   const [retryTask, setRetryTask] = useState<PrototypeTask | null>(null);
@@ -287,10 +288,12 @@ export function Workbench({
     observer.observe(node);
     window.addEventListener("resize", update);
     document.addEventListener("scroll", update, true);
+    document.addEventListener("toggle", update, true);
     return () => {
       observer.disconnect();
       window.removeEventListener("resize", update);
       document.removeEventListener("scroll", update, true);
+      document.removeEventListener("toggle", update, true);
       void desktop().workbench.hide();
     };
   }, [tab, loaded, previewReady, visible, projectId, comparison]);
@@ -484,15 +487,114 @@ export function Workbench({
               </button>
             </div>
           )}
-          {tab === "prototype" && (
-            <PagePaintProgress
-              projectId={projectId}
-              onOpen={(id) => {
-                void desktop().workbench.versions(projectId).then(setVersions);
-                setSelected(id);
-              }}
-            />
-          )}
+          <details className="paint-tools" aria-label="绘制步骤与页面依据">
+            <summary>
+              绘制步骤与页面依据{" "}
+              <span className="muted">
+                {paintStatus}
+                {retryTask ? " · 有生成任务失败，可展开重试" : ""}
+              </span>
+            </summary>
+            {tab === "prototype" && (
+              <PagePaintProgress
+                projectId={projectId}
+                onStatus={setPaintStatus}
+                onOpen={(id) => {
+                  void desktop()
+                    .workbench.versions(projectId)
+                    .then(setVersions);
+                  setSelected(id);
+                }}
+              />
+            )}
+            <section className="capture-controls">
+              <label>
+                页面依据
+                <select
+                  aria-label="页面依据"
+                  value={selectedCapture}
+                  onChange={(e) => setSelectedCapture(e.target.value)}
+                >
+                  <option value="">选择已采集的页面状态</option>
+                  {captureList.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title} · {new Date(c.capturedAt).toLocaleTimeString()}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                disabled={!selectedCapture}
+                onClick={() =>
+                  void desktop()
+                    .workbench.revealCapture(projectId, selectedCapture)
+                    .catch((e) => setError(errorText(e)))
+                }
+              >
+                查看来源
+              </button>
+              <button
+                className="primary"
+                disabled={!selectedCapture || generating || busy}
+                onClick={() =>
+                  void perform(async () => {
+                    const version = await desktop().workbench.generate(
+                      projectId,
+                      selectedCapture,
+                    );
+                    setVersions(await desktop().workbench.versions(projectId));
+                    setSelected(version.id);
+                    setTab("prototype");
+                  })
+                }
+              >
+                依据此状态生成原型
+              </button>
+            </section>
+            {(progress || retryTask) && (
+              <div className="notice" role="status">
+                {progress
+                  ? `${progress.message} · ${progress.characters.toLocaleString()} 字符`
+                  : "上次原型生成未完成，可以从原依据重试。"}
+                {retryTask && (
+                  <button
+                    disabled={busy || generating}
+                    onClick={() =>
+                      void perform(async () => {
+                        const version = await desktop().workbench.retry(
+                          projectId,
+                          retryTask.id,
+                        );
+                        setVersions(
+                          await desktop().workbench.versions(projectId),
+                        );
+                        setSelected(version.id);
+                        setTab("prototype");
+                        setRetryTask(null);
+                      })
+                    }
+                  >
+                    重试原型生成
+                  </button>
+                )}
+                {retryTask && (
+                  <p className="muted">
+                    使用失败任务保存的页面依据和修改要求，重新生成新候选；不会覆盖旧版。
+                  </p>
+                )}
+                {generating && (
+                  <button
+                    onClick={() => void desktop().workbench.cancel(projectId)}
+                  >
+                    取消生成
+                  </button>
+                )}
+              </div>
+            )}
+            <p className="muted">
+              生成时会把选定页面的文字、结构和样式发送给当前项目的模型。截图保存在本地，当前生成不使用图像输入。
+            </p>
+          </details>
           {tab === "prototype" && selected && (
             <div className="canvas-tools">
               <button
@@ -673,93 +775,6 @@ export function Workbench({
               ? "手动浏览器：仅采集当前页面。自动探索请使用「理解产品」里的独立 Chrome。"
               : "原型模式：只运行模拟交互，外部网络与真实业务写入已禁用。"}
           </div>
-          <section className="capture-controls">
-            <label>
-              页面依据
-              <select
-                aria-label="页面依据"
-                value={selectedCapture}
-                onChange={(e) => setSelectedCapture(e.target.value)}
-              >
-                <option value="">选择已采集的页面状态</option>
-                {captureList.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.title} · {new Date(c.capturedAt).toLocaleTimeString()}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              disabled={!selectedCapture}
-              onClick={() =>
-                void desktop()
-                  .workbench.revealCapture(projectId, selectedCapture)
-                  .catch((e) => setError(errorText(e)))
-              }
-            >
-              查看来源
-            </button>
-            <button
-              className="primary"
-              disabled={!selectedCapture || generating || busy}
-              onClick={() =>
-                void perform(async () => {
-                  const version = await desktop().workbench.generate(
-                    projectId,
-                    selectedCapture,
-                  );
-                  setVersions(await desktop().workbench.versions(projectId));
-                  setSelected(version.id);
-                  setTab("prototype");
-                })
-              }
-            >
-              依据此状态生成原型
-            </button>
-          </section>
-          {(progress || retryTask) && (
-            <div className="notice" role="status">
-              {progress
-                ? `${progress.message} · ${progress.characters.toLocaleString()} 字符`
-                : "上次原型生成未完成，可以从原依据重试。"}
-              {retryTask && (
-                <button
-                  disabled={busy || generating}
-                  onClick={() =>
-                    void perform(async () => {
-                      const version = await desktop().workbench.retry(
-                        projectId,
-                        retryTask.id,
-                      );
-                      setVersions(
-                        await desktop().workbench.versions(projectId),
-                      );
-                      setSelected(version.id);
-                      setTab("prototype");
-                      setRetryTask(null);
-                    })
-                  }
-                >
-                  重试原型生成
-                </button>
-              )}
-              {retryTask && (
-                <p className="muted">
-                  使用失败任务保存的页面依据和修改要求，重新生成新候选；不会覆盖旧版。
-                </p>
-              )}
-              {generating && (
-                <button
-                  onClick={() => void desktop().workbench.cancel(projectId)}
-                >
-                  取消生成
-                </button>
-              )}
-            </div>
-          )}
-          <p className="muted">
-            生成时会把选定页面的文字、结构和样式发送给当前项目的模型。截图保存在本地，当前生成不使用图像输入。
-          </p>
         </>
       )}
     </>

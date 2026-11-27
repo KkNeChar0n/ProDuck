@@ -6,6 +6,7 @@ import {
   writeFileSync,
   cpSync,
   rmSync,
+  existsSync,
 } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -73,6 +74,13 @@ try {
     env,
   });
   verifyRuntime(appRoot, manifest);
+  for (const name of [
+    "desktop-wide-collapsed.png",
+    "desktop-page-paint-retry.png",
+  ]) {
+    const source = join(work, "docs/verification", name);
+    if (existsSync(source)) cpSync(source, resolve("docs/verification", name));
+  }
   const report = {
     version,
     checkedAt: new Date().toISOString(),

@@ -111,6 +111,8 @@ export interface DiscoveryFeature {
   sourceIds: string[];
 }
 export interface PagePaintTask {
+  layout?: { version: 1; template: string };
+  repaint?: boolean;
   baselineId?: string;
   id: string;
   key: string;
@@ -214,6 +216,7 @@ export interface DiscoveryBridge {
     id: string,
     runId: string,
     pageId?: string,
+    redraw?: boolean,
   ): Promise<DiscoveryRun>;
   supplement(
     id: string,

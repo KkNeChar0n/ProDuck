@@ -794,7 +794,12 @@ export class DiscoveryService {
     }
     this.memory.saveRun(scope, run);
   }
-  async generateCandidate(scope: string, runId: string, pageId?: string) {
+  async generateCandidate(
+    scope: string,
+    runId: string,
+    pageId?: string,
+    redraw = false,
+  ) {
     const project = this.projects.shared(scope);
     if (this.active.has(project.id)) throw new Error("当前任务尚未结束");
     const run = this.memory.run(scope, runId);
@@ -806,6 +811,21 @@ export class DiscoveryService {
       : undefined;
     if (pageId && (!page || !this.onCapture))
       throw new Error("页面任务不属于当前轮次");
+    if (redraw) {
+      if (!page) throw new Error("请选择需要重新绘制的页面");
+      run.pageTasks!.push({
+        ...structuredClone(page),
+        id: randomUUID(),
+        baselineId: page.versionId ?? page.baselineId,
+        repaint: true,
+        layout: undefined,
+        parts: [],
+        versionId: undefined,
+        error: undefined,
+        state: "pending",
+      });
+      this.memory.saveRun(scope, run);
+    }
     const controller = new AbortController();
     const entry = { controller, runId: run.id, task: Promise.resolve() };
     this.active.set(project.id, entry);

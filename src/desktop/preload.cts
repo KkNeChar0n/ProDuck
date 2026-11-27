@@ -3,8 +3,19 @@ contextBridge.exposeInMainWorld(
   "produck",
   Object.freeze({
     discovery: {
-      generateCandidate: (id: string, runId: string, pageId?: string) =>
-        ipcRenderer.invoke("discovery:generate-candidate", id, runId, pageId),
+      generateCandidate: (
+        id: string,
+        runId: string,
+        pageId?: string,
+        redraw?: boolean,
+      ) =>
+        ipcRenderer.invoke(
+          "discovery:generate-candidate",
+          id,
+          runId,
+          pageId,
+          redraw,
+        ),
       submitSupplements: (id: string, runId: string, items: unknown[]) =>
         ipcRenderer.invoke("discovery:submit-supplements", id, runId, items),
       supplement: (
